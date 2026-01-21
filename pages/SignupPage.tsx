@@ -22,6 +22,11 @@ const SignupPage: React.FC<{ onToggle: () => void }> = ({ onToggle }) => {
     const { data, error: signUpError } = await supabase.auth.signUp({
       email,
       password,
+      options: {
+        data: {
+          full_name: name,
+        }
+      }
     });
 
     if (signUpError) {
@@ -40,7 +45,8 @@ const SignupPage: React.FC<{ onToggle: () => void }> = ({ onToggle }) => {
       });
 
       if (profileError) {
-        setError(profileError.message);
+        console.error("Profile Error:", profileError);
+        setError("Account created but profile setup failed. Please contact support.");
         setLoading(false);
       } else {
         setSubmitted(true);
@@ -55,7 +61,9 @@ const SignupPage: React.FC<{ onToggle: () => void }> = ({ onToggle }) => {
           <i className="fa-solid fa-check-double text-4xl"></i>
         </div>
         <h2 className="text-3xl font-black text-slate-800 mb-2">Request Sent!</h2>
-        <p className="text-slate-500 mb-8 font-medium">Please check your email for a confirmation link. You can login once verified and approved.</p>
+        <p className="text-slate-500 mb-8 font-medium italic">
+          Important: Check your email inbox. You must click the verification link before you can log in.
+        </p>
         <button onClick={onToggle} className="w-full bg-indigo-600 text-white font-black py-5 rounded-2xl shadow-xl shadow-indigo-100">Back to Login</button>
       </div>
     );
@@ -69,7 +77,12 @@ const SignupPage: React.FC<{ onToggle: () => void }> = ({ onToggle }) => {
         <p className="text-slate-400 font-medium">Friendship that stands in crisis.</p>
       </div>
 
-      {error && <div className="bg-red-50 text-red-500 p-4 rounded-2xl text-xs font-bold mb-6 border border-red-100">{error}</div>}
+      {error && (
+        <div className="bg-rose-50 text-rose-500 p-4 rounded-2xl text-xs font-bold mb-6 border border-rose-100 flex items-center gap-2">
+          <i className="fa-solid fa-triangle-exclamation"></i>
+          <span>{error}</span>
+        </div>
+      )}
 
       <form onSubmit={handleSubmit} className="space-y-6">
         <div>
@@ -87,11 +100,17 @@ const SignupPage: React.FC<{ onToggle: () => void }> = ({ onToggle }) => {
         <div>
           <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5 ml-1">Account Role</label>
           <div className="flex gap-4">
-            <button type="button" onClick={() => setRole(UserRole.MEMBER)} className={`flex-1 py-4 rounded-2xl text-sm font-bold border transition-all ${role === UserRole.MEMBER ? 'bg-indigo-600 border-indigo-600 text-white' : 'bg-white border-slate-100 text-slate-400'}`}>Member</button>
-            <button type="button" onClick={() => setRole(UserRole.ADMIN)} className={`flex-1 py-4 rounded-2xl text-sm font-bold border transition-all ${role === UserRole.ADMIN ? 'bg-indigo-600 border-indigo-600 text-white' : 'bg-white border-slate-100 text-slate-400'}`}>Manager</button>
+            <button type="button" onClick={() => setRole(UserRole.MEMBER)} className={`flex-1 py-4 rounded-2xl text-sm font-bold border transition-all ${role === UserRole.MEMBER ? 'bg-indigo-600 border-indigo-600 text-white shadow-lg shadow-indigo-100' : 'bg-white border-slate-100 text-slate-400'}`}>Member</button>
+            <button type="button" onClick={() => setRole(UserRole.ADMIN)} className={`flex-1 py-4 rounded-2xl text-sm font-bold border transition-all ${role === UserRole.ADMIN ? 'bg-indigo-600 border-indigo-600 text-white shadow-lg shadow-indigo-100' : 'bg-white border-slate-100 text-slate-400'}`}>Manager</button>
           </div>
         </div>
-        <button disabled={loading} type="submit" className="w-full bg-slate-900 text-white font-black py-5 rounded-2xl shadow-xl active:scale-95 transition-all disabled:opacity-50">{loading ? 'Creating...' : 'Submit Request'}</button>
+        <button disabled={loading} type="submit" className="w-full bg-slate-900 text-white font-black py-5 rounded-2xl shadow-xl active:scale-95 transition-all disabled:opacity-50">
+          {loading ? (
+            <span className="flex items-center justify-center gap-2">
+              <i className="fa-solid fa-spinner animate-spin"></i> Processing...
+            </span>
+          ) : 'Submit Request'}
+        </button>
       </form>
       <div className="mt-8 text-center"><p className="text-sm text-slate-400 font-medium">Already have an account? <button onClick={onToggle} className="text-indigo-600 font-black">Sign In</button></p></div>
     </div>
