@@ -1,0 +1,7 @@
+{
+  "name": "Funters Fund",
+  "description": "A robust communal emergency fund management application for private circles with automated 70/30 recovery logic and real-time financial tracking.",
+  "requestFramePermissions": [
+    "camera"
+  ]
+}
