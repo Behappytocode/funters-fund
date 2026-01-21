@@ -15,27 +15,49 @@ const SignupPage: React.FC<{ onToggle: () => void }> = ({ onToggle }) => {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!name || !email || !password) return;
+    const cleanName = name.trim();
+    const cleanEmail = email.trim();
+    const cleanPassword = password.trim();
+
+    if (!cleanName || !cleanEmail || !cleanPassword) {
+      setError('Please fill in all fields.');
+      return;
+    }
+
+    if (cleanPassword.length < 6) {
+      setError('Password must be at least 6 characters.');
+      return;
+    }
 
     setLoading(true);
     setError('');
 
-    const { error: signUpError } = await supabase.auth.signUp({
-      email,
-      password,
-      options: {
-        data: {
-          full_name: name,
-          role: role,
+    try {
+      const { data, error: signUpError } = await supabase.auth.signUp({
+        email: cleanEmail,
+        password: cleanPassword,
+        options: {
+          data: {
+            full_name: cleanName,
+            role: role,
+          }
         }
-      }
-    });
+      });
 
-    if (signUpError) {
-      setError(signUpError.message);
-      setLoading(false);
-    } else {
-      setSuccess(true);
+      if (signUpError) {
+        setError(signUpError.message);
+        setLoading(false);
+      } else if (data.user && data.user.identities && data.user.identities.length === 0) {
+        // This is a Supabase security feature: it returns a user object 
+        // even if the email exists, but the 'identities' array is empty.
+        setError('An account with this email already exists.');
+        setLoading(false);
+      } else {
+        setSuccess(true);
+        setLoading(false);
+      }
+    } catch (err) {
+      setError('Signup failed. Please check your connection and try again.');
       setLoading(false);
     }
   };
@@ -43,17 +65,22 @@ const SignupPage: React.FC<{ onToggle: () => void }> = ({ onToggle }) => {
   if (success) {
     return (
       <div className="min-h-screen bg-white p-8 flex flex-col justify-center items-center text-center max-w-md mx-auto">
-        <div className="w-24 h-24 bg-emerald-50 text-emerald-500 rounded-full flex items-center justify-center mb-6 border border-emerald-100">
+        <div className="w-24 h-24 bg-emerald-50 text-emerald-500 rounded-full flex items-center justify-center mb-6 border border-emerald-100 animate-in zoom-in duration-300">
           <i className="fa-solid fa-circle-check text-4xl"></i>
         </div>
-        <h2 className="text-3xl font-black text-slate-800 mb-2 tracking-tight">Account Created</h2>
-        <p className="text-slate-500 mb-8 font-medium leading-relaxed">
-          Your account has been registered successfully. <br/>
+        <h2 className="text-3xl font-black text-slate-800 mb-2 tracking-tight">Success!</h2>
+        <p className="text-slate-500 mb-8 font-medium leading-relaxed px-4">
+          Registration complete for <b className="text-indigo-600">{email}</b>.<br/>
           {role === UserRole.MEMBER 
-            ? "A manager must approve your request before you can log in." 
-            : "You can now sign in as a manager."}
+            ? "A manager must approve your request before you can access the dashboard." 
+            : "You can now sign in to your manager dashboard immediately."}
         </p>
-        <button onClick={onToggle} className="w-full bg-slate-900 text-white font-black py-5 rounded-2xl shadow-xl">Back to Login</button>
+        <button 
+          onClick={onToggle} 
+          className="w-full bg-slate-900 text-white font-black py-5 rounded-2xl shadow-xl active:scale-95 transition-all"
+        >
+          Proceed to Sign In
+        </button>
       </div>
     );
   }
@@ -67,7 +94,7 @@ const SignupPage: React.FC<{ onToggle: () => void }> = ({ onToggle }) => {
       </div>
 
       {error && (
-        <div className="bg-rose-50 text-rose-500 p-4 rounded-2xl text-xs font-bold mb-6 border border-rose-100 flex items-center gap-2">
+        <div className="bg-rose-50 text-rose-500 p-4 rounded-2xl text-xs font-bold mb-6 border border-rose-100 flex items-center gap-2 animate-in fade-in slide-in-from-top-2">
           <i className="fa-solid fa-triangle-exclamation"></i> <span>{error}</span>
         </div>
       )}

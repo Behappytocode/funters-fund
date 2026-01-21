@@ -11,21 +11,34 @@ const LoginPage: React.FC<{ onToggle: () => void }> = ({ onToggle }) => {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!email || !password) return;
+    const cleanEmail = email.trim();
+    const cleanPassword = password.trim();
+
+    if (!cleanEmail || !cleanPassword) {
+      setError('Please enter both email and password.');
+      return;
+    }
     
     setLoading(true);
     setError('');
     
-    const { error: authError } = await supabase.auth.signInWithPassword({
-      email,
-      password,
-    });
+    try {
+      const { error: authError } = await supabase.auth.signInWithPassword({
+        email: cleanEmail,
+        password: cleanPassword,
+      });
 
-    if (authError) {
-      setError(authError.message);
-      setLoading(false);
-    } else {
-      // App.tsx handles the session change
+      if (authError) {
+        // Map common errors to user-friendly messages
+        if (authError.message.includes('Invalid login credentials')) {
+          setError('Invalid email or password. Please try again.');
+        } else {
+          setError(authError.message);
+        }
+        setLoading(false);
+      }
+    } catch (err) {
+      setError('An unexpected error occurred. Please try again.');
       setLoading(false);
     }
   };
@@ -39,8 +52,8 @@ const LoginPage: React.FC<{ onToggle: () => void }> = ({ onToggle }) => {
       </div>
 
       {error && (
-        <div className="bg-rose-50 text-rose-500 p-4 rounded-2xl text-xs font-bold mb-6 border border-rose-100 flex items-center gap-2">
-          <i className="fa-solid fa-circle-exclamation"></i> {error}
+        <div className="bg-rose-50 text-rose-500 p-4 rounded-2xl text-xs font-bold mb-6 border border-rose-100 flex items-center gap-2 animate-in fade-in slide-in-from-top-2">
+          <i className="fa-solid fa-circle-exclamation"></i> <span>{error}</span>
         </div>
       )}
 
