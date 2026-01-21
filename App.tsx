@@ -13,7 +13,6 @@ import DevProfile from './pages/DevProfile.tsx';
 import LoginPage from './pages/LoginPage.tsx';
 import SignupPage from './pages/SignupPage.tsx';
 
-// Fix: Added ConfigRow component for configuration error display
 const ConfigRow: React.FC<{ label: string, active: boolean }> = ({ label, active }) => (
   <div className="flex items-center justify-between bg-slate-50 p-3 rounded-xl border border-slate-100">
     <span className="text-[10px] font-bold text-slate-500">{label}</span>
@@ -24,7 +23,6 @@ const ConfigRow: React.FC<{ label: string, active: boolean }> = ({ label, active
   </div>
 );
 
-// Fix: Added NavBtn component for the bottom navigation bar
 const NavBtn: React.FC<{ active: boolean, onClick: () => void, icon: string, count?: number }> = ({ active, onClick, icon, count }) => (
   <button 
     onClick={onClick}
@@ -52,6 +50,12 @@ const App: React.FC = () => {
     loans: [],
     developerInfo: INITIAL_DEVELOPER
   });
+
+  const logout = async () => {
+    if (isSupabaseConfigured) await supabase.auth.signOut();
+    setActiveTab('HOME');
+    setIsLoginView(true);
+  };
 
   useEffect(() => {
     if (!isSupabaseConfigured) {
@@ -91,21 +95,8 @@ const App: React.FC = () => {
     if (!isSupabaseConfigured) return;
     try {
       const { data: profiles } = await supabase.from('profiles').select('*');
-      
-      // Select data with join on profiles to get member names
-      const { data: depositsData } = await supabase
-        .from('deposits')
-        .select(`
-          *,
-          profiles (name)
-        `);
-
-      const { data: loansData } = await supabase
-        .from('loans')
-        .select(`
-          *,
-          profiles (name)
-        `);
+      const { data: depositsData } = await supabase.from('deposits').select(`*, profiles(name)`);
+      const { data: loansData } = await supabase.from('loans').select(`*, profiles(name)`);
 
       setAppState(prev => ({
         ...prev,
@@ -159,12 +150,6 @@ const App: React.FC = () => {
     }
   };
 
-  const logout = async () => {
-    if (isSupabaseConfigured) await supabase.auth.signOut();
-    setActiveTab('HOME');
-    setIsLoginView(true);
-  };
-
   if (!isSupabaseConfigured) {
     return (
       <div className="min-h-screen bg-slate-50 flex flex-col items-center justify-center p-6 text-center">
@@ -173,34 +158,11 @@ const App: React.FC = () => {
             <i className="fa-solid fa-cloud-bolt text-4xl"></i>
           </div>
           <h2 className="text-3xl font-black text-slate-800 mb-4 tracking-tight">Syncing Required</h2>
-          <div className="text-slate-500 mb-8 text-sm leading-relaxed space-y-4">
-            <p>The keys are in Vercel, but the current build doesn't see them.</p>
-            <div className="bg-amber-50 p-4 rounded-2xl border border-amber-100 text-amber-700 text-left text-xs space-y-2">
-              <p className="font-bold">Mandatory Steps:</p>
-              <ul className="list-disc ml-4 space-y-1">
-                <li>Go to Vercel Settings &gt; Environment Variables.</li>
-                <li>Ensure you clicked <b>"Finish update"</b> or <b>"Save"</b>.</li>
-                <li>Go to the <b>Deployments</b> tab.</li>
-                <li>Click <b>Redeploy</b> on the latest production build.</li>
-              </ul>
-            </div>
-          </div>
-          
           <div className="space-y-3 mb-8">
             <ConfigRow label="VITE_SUPABASE_URL" active={configStatus.url} />
             <ConfigRow label="VITE_SUPABASE_ANON_KEY" active={configStatus.key} />
           </div>
-
-          <button 
-            onClick={() => window.location.reload()}
-            className="w-full bg-indigo-600 hover:bg-indigo-700 text-white py-4 rounded-2xl font-black text-xs uppercase tracking-widest shadow-xl shadow-indigo-100 transition-all mb-4"
-          >
-            I Redeployed - Check Again
-          </button>
-
-          <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest">
-            Last check: {new Date().toLocaleTimeString()}
-          </p>
+          <button onClick={() => window.location.reload()} className="w-full bg-indigo-600 text-white py-4 rounded-2xl font-black text-xs uppercase tracking-widest shadow-xl">Check Again</button>
         </div>
       </div>
     );
@@ -209,19 +171,30 @@ const App: React.FC = () => {
   if (loading) {
     return (
       <div className="min-h-screen flex flex-col items-center justify-center bg-white">
-        <div className="relative">
-          <div className="animate-spin rounded-full h-16 w-16 border-t-4 border-b-4 border-indigo-600"></div>
-          <div className="absolute inset-0 flex items-center justify-center">
-            <i className="fa-solid fa-handshake text-indigo-600"></i>
-          </div>
-        </div>
-        <p className="mt-6 text-xs font-black text-slate-400 uppercase tracking-[0.3em] animate-pulse">Connecting to Circle</p>
+        <div className="animate-spin rounded-full h-16 w-16 border-t-4 border-b-4 border-indigo-600"></div>
+        <p className="mt-6 text-xs font-black text-slate-400 uppercase tracking-widest">Opening Vault...</p>
       </div>
     );
   }
 
   if (!appState.currentUser) {
     return isLoginView ? <LoginPage onToggle={() => setIsLoginView(false)} /> : <SignupPage onToggle={() => setIsLoginView(true)} />;
+  }
+
+  // Handle "PENDING" members who have signed up but aren't approved yet
+  if (appState.currentUser.status === UserStatus.PENDING) {
+    return (
+      <div className="min-h-screen bg-white p-8 flex flex-col justify-center items-center text-center max-w-md mx-auto">
+        <div className="w-24 h-24 bg-amber-50 text-amber-500 rounded-full flex items-center justify-center mb-6 border border-amber-100">
+          <i className="fa-solid fa-hourglass-start text-4xl"></i>
+        </div>
+        <h2 className="text-3xl font-black text-slate-800 mb-2">Request Pending</h2>
+        <p className="text-slate-500 mb-8 font-medium">
+          Welcome, {appState.currentUser.name}! Your membership request is currently being reviewed by a Fund Manager. Please check back later.
+        </p>
+        <button onClick={logout} className="w-full bg-slate-100 text-slate-600 font-black py-5 rounded-2xl border border-slate-200">Sign Out</button>
+      </div>
+    );
   }
 
   const isManager = appState.currentUser.role === UserRole.ADMIN;
@@ -251,7 +224,7 @@ const App: React.FC = () => {
           active={activeTab === 'INBOX'} 
           onClick={() => setActiveTab('INBOX')} 
           icon="fa-inbox" 
-          count={appState.users.filter(u => u.status === UserStatus.PENDING).length} 
+          count={isManager ? appState.users.filter(u => u.status === UserStatus.PENDING).length : 0} 
         />
         <NavBtn active={activeTab === 'DEV'} onClick={() => setActiveTab('DEV')} icon="fa-user-gear" />
       </nav>

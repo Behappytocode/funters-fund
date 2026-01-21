@@ -5,32 +5,53 @@ import { supabase } from '../supabase';
 
 const LoginPage: React.FC<{ onToggle: () => void }> = ({ onToggle }) => {
   const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+  const [sent, setSent] = useState(false);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
     setError('');
     
-    const { error: authError } = await supabase.auth.signInWithPassword({
+    // Supabase Passwordless Magic Link Login
+    const { error: authError } = await supabase.auth.signInWithOtp({
       email,
-      password,
+      options: {
+        emailRedirectTo: window.location.origin,
+      }
     });
 
     if (authError) {
       setError(authError.message);
       setLoading(false);
+    } else {
+      setSent(true);
+      setLoading(false);
     }
   };
+
+  if (sent) {
+    return (
+      <div className="min-h-screen bg-white p-8 flex flex-col justify-center items-center text-center max-w-md mx-auto">
+        <div className="w-24 h-24 bg-indigo-50 text-indigo-500 rounded-full flex items-center justify-center mb-6 border border-indigo-100 animate-pulse">
+          <i className="fa-solid fa-paper-plane text-3xl"></i>
+        </div>
+        <h2 className="text-3xl font-black text-slate-800 mb-2">Check Your Email</h2>
+        <p className="text-slate-500 mb-8 font-medium">
+          We've sent a magic login link to <b>{email}</b>. Click the link to access Funters Fund.
+        </p>
+        <button onClick={() => setSent(false)} className="text-indigo-600 font-black text-sm uppercase tracking-widest">Didn't get it? Try again</button>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-white p-8 flex flex-col justify-center max-w-md mx-auto">
       <div className="mb-12 flex flex-col items-center">{LOGO}</div>
       <div className="space-y-2 mb-8 text-center">
-        <h2 className="text-3xl font-black text-slate-800">Welcome Back</h2>
-        <p className="text-slate-400 font-medium">Please enter your details to sign in.</p>
+        <h2 className="text-3xl font-black text-slate-800">Fast Login</h2>
+        <p className="text-slate-400 font-medium">No password needed. Just your email.</p>
       </div>
 
       {error && (
@@ -41,19 +62,11 @@ const LoginPage: React.FC<{ onToggle: () => void }> = ({ onToggle }) => {
 
       <form onSubmit={handleSubmit} className="space-y-6">
         <div>
-          <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5 ml-1">Email Address</label>
+          <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5 ml-1">Member Email</label>
           <input 
             type="email" required value={email} onChange={e => setEmail(e.target.value)}
             className="w-full bg-slate-50 border border-slate-100 px-5 py-4 rounded-2xl text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:bg-white transition-all"
-            placeholder="admin@funters.com"
-          />
-        </div>
-        <div>
-          <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5 ml-1">Password</label>
-          <input 
-            type="password" required value={password} onChange={e => setPassword(e.target.value)}
-            className="w-full bg-slate-50 border border-slate-100 px-5 py-4 rounded-2xl text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:bg-white transition-all"
-            placeholder="••••••••"
+            placeholder="yourname@example.com"
           />
         </div>
 
@@ -62,13 +75,13 @@ const LoginPage: React.FC<{ onToggle: () => void }> = ({ onToggle }) => {
           type="submit" 
           className="w-full bg-indigo-600 text-white font-black py-5 rounded-2xl shadow-xl shadow-indigo-100 hover:bg-indigo-700 active:scale-95 transition-all disabled:opacity-50"
         >
-          {loading ? 'Signing In...' : 'Sign In'}
+          {loading ? 'Sending Link...' : 'Send Magic Link'}
         </button>
       </form>
 
       <div className="mt-8 text-center">
         <p className="text-sm text-slate-400 font-medium">
-          Don't have an account? <button onClick={onToggle} className="text-indigo-600 font-black">Request Membership</button>
+          First time here? <button onClick={onToggle} className="text-indigo-600 font-black">Request Membership</button>
         </p>
       </div>
     </div>
