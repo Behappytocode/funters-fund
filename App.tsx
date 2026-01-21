@@ -2,7 +2,7 @@
 import React, { useState, useEffect } from 'react';
 import { User, UserRole, UserStatus, AppState } from './types.ts';
 import { INITIAL_DEVELOPER, LOGO } from './constants.tsx';
-import { supabase, isSupabaseConfigured } from './supabase.ts';
+import { supabase, isSupabaseConfigured, configStatus } from './supabase.ts';
 
 // Pages
 import Dashboard from './pages/Dashboard.tsx';
@@ -12,6 +12,33 @@ import InboxPage from './pages/InboxPage.tsx';
 import DevProfile from './pages/DevProfile.tsx';
 import LoginPage from './pages/LoginPage.tsx';
 import SignupPage from './pages/SignupPage.tsx';
+
+// Fix: Added ConfigRow component for configuration error display
+const ConfigRow: React.FC<{ label: string, active: boolean }> = ({ label, active }) => (
+  <div className="flex items-center justify-between bg-slate-50 p-3 rounded-xl border border-slate-100">
+    <span className="text-[10px] font-bold text-slate-500">{label}</span>
+    <div className={`flex items-center gap-1.5 ${active ? 'text-emerald-500' : 'text-rose-500'}`}>
+      <i className={`fa-solid ${active ? 'fa-circle-check' : 'fa-circle-xmark'} text-[10px]`}></i>
+      <span className="text-[10px] font-black uppercase tracking-wider">{active ? 'Detected' : 'Missing'}</span>
+    </div>
+  </div>
+);
+
+// Fix: Added NavBtn component for the bottom navigation bar
+const NavBtn: React.FC<{ active: boolean, onClick: () => void, icon: string, count?: number }> = ({ active, onClick, icon, count }) => (
+  <button 
+    onClick={onClick}
+    className={`relative w-12 h-12 rounded-full flex items-center justify-center transition-all duration-300 ${active ? 'bg-indigo-600 text-white scale-110 shadow-lg shadow-indigo-500/50' : 'text-slate-400 hover:text-white'}`}
+  >
+    <i className={`fa-solid ${icon} ${active ? 'text-lg' : 'text-base'}`}></i>
+    {count && count > 0 && !active && (
+      <span className="absolute top-1 right-1 w-4 h-4 bg-rose-500 text-[8px] font-black flex items-center justify-center rounded-full text-white ring-2 ring-slate-900">
+        {count}
+      </span>
+    )}
+    {active && <div className="absolute -bottom-1 w-1 h-1 bg-white rounded-full"></div>}
+  </button>
+);
 
 const App: React.FC = () => {
   const [activeTab, setActiveTab] = useState<'HOME' | 'DEPOSITS' | 'LOANS' | 'INBOX' | 'DEV'>('HOME');
@@ -70,8 +97,24 @@ const App: React.FC = () => {
       setAppState(prev => ({
         ...prev,
         users: profiles || [],
-        deposits: deposits?.map(d => ({...d, memberName: d.profiles?.name || 'Unknown'})) || [],
-        loans: loans?.map(l => ({...l, memberName: l.profiles?.name || 'Unknown'})) || []
+        // Fix: Ensure field names match interface expectations
+        deposits: deposits?.map(d => ({
+          ...d, 
+          memberName: (d.profiles as any)?.name || 'Unknown',
+          memberId: d.member_id,
+          paymentDate: d.payment_date,
+          entryDate: d.created_at
+        })) || [],
+        loans: loans?.map(l => ({
+          ...l, 
+          memberName: (l.profiles as any)?.name || 'Unknown',
+          memberId: l.member_id,
+          totalAmount: l.total_amount,
+          recoverableAmount: l.recoverable_amount,
+          waiverAmount: l.waiver_amount,
+          issueDate: l.issue_date,
+          termMonths: l.term_months
+        })) || []
       }));
     } catch (err) {
       console.error("Data fetch error:", err);
@@ -107,26 +150,38 @@ const App: React.FC = () => {
   if (!isSupabaseConfigured) {
     return (
       <div className="min-h-screen bg-slate-50 flex flex-col items-center justify-center p-6 text-center">
-        <div className="bg-white p-10 rounded-[40px] shadow-2xl max-w-md w-full border border-indigo-100">
-          <div className="w-24 h-24 bg-indigo-50 text-indigo-600 rounded-full flex items-center justify-center mx-auto mb-8 animate-pulse">
+        <div className="bg-white p-10 rounded-[40px] shadow-2xl max-w-md w-full border border-indigo-100 animate-in fade-in zoom-in duration-500">
+          <div className="w-24 h-24 bg-indigo-50 text-indigo-600 rounded-full flex items-center justify-center mx-auto mb-8 animate-bounce">
             <i className="fa-solid fa-cloud-bolt text-4xl"></i>
           </div>
           <h2 className="text-3xl font-black text-slate-800 mb-4 tracking-tight">Syncing Required</h2>
-          <p className="text-slate-500 mb-8 text-sm leading-relaxed">
-            The app is deployed but cannot find your Supabase keys. Please ensure your environment variables in Vercel are exactly:
-          </p>
-          <div className="space-y-3 mb-8">
-            <div className="bg-slate-50 p-4 rounded-2xl border border-slate-100 flex justify-between items-center group">
-              <code className="text-xs font-bold text-indigo-600">VITE_SUPABASE_URL</code>
-              <i className="fa-solid fa-circle-check text-slate-200 group-hover:text-emerald-400 transition-colors"></i>
-            </div>
-            <div className="bg-slate-50 p-4 rounded-2xl border border-slate-100 flex justify-between items-center group">
-              <code className="text-xs font-bold text-indigo-600">VITE_SUPABASE_ANON_KEY</code>
-              <i className="fa-solid fa-circle-check text-slate-200 group-hover:text-emerald-400 transition-colors"></i>
+          <div className="text-slate-500 mb-8 text-sm leading-relaxed space-y-4">
+            <p>The keys are in Vercel, but the current build doesn't see them.</p>
+            <div className="bg-amber-50 p-4 rounded-2xl border border-amber-100 text-amber-700 text-left text-xs space-y-2">
+              <p className="font-bold">Mandatory Steps:</p>
+              <ul className="list-disc ml-4 space-y-1">
+                <li>Go to Vercel Settings &gt; Environment Variables.</li>
+                <li>Ensure you clicked <b>"Finish update"</b> or <b>"Save"</b>.</li>
+                <li>Go to the <b>Deployments</b> tab.</li>
+                <li>Click <b>Redeploy</b> on the latest production build.</li>
+              </ul>
             </div>
           </div>
+          
+          <div className="space-y-3 mb-8">
+            <ConfigRow label="VITE_SUPABASE_URL" active={configStatus.url} />
+            <ConfigRow label="VITE_SUPABASE_ANON_KEY" active={configStatus.key} />
+          </div>
+
+          <button 
+            onClick={() => window.location.reload()}
+            className="w-full bg-indigo-600 hover:bg-indigo-700 text-white py-4 rounded-2xl font-black text-xs uppercase tracking-widest shadow-xl shadow-indigo-100 transition-all mb-4"
+          >
+            I Redeployed - Check Again
+          </button>
+
           <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest">
-            Try Redeploying after adding keys
+            Last check: {new Date().toLocaleTimeString()}
           </p>
         </div>
       </div>
@@ -153,43 +208,39 @@ const App: React.FC = () => {
 
   const isManager = appState.currentUser.role === UserRole.ADMIN;
 
+  // Fix: Completed the return statement with proper layout and navigation
   return (
-    <div className="min-h-screen bg-slate-50 flex flex-col">
-      <header className="bg-white px-4 py-3 border-b sticky top-0 z-50 flex justify-between items-center">
+    <div className="min-h-screen bg-slate-50 pb-24">
+      <header className="bg-white px-6 py-4 flex items-center justify-between shadow-sm sticky top-0 z-40">
         {LOGO}
-        <div className="flex items-center gap-3">
-          <div className="w-9 h-9 rounded-full overflow-hidden border-2 border-indigo-100">
-            <img src={appState.currentUser.profilePic || `https://ui-avatars.com/api/?name=${encodeURIComponent(appState.currentUser.name)}&background=6366f1&color=fff`} alt="Profile" className="w-full h-full object-cover"/>
-          </div>
-          <button onClick={logout} className="text-slate-400 hover:text-red-500 transition-colors p-2"><i className="fa-solid fa-arrow-right-from-bracket text-lg"></i></button>
-        </div>
+        <button onClick={logout} className="w-10 h-10 bg-slate-50 rounded-xl flex items-center justify-center text-slate-400 hover:text-rose-500 transition-colors">
+          <i className="fa-solid fa-right-from-bracket"></i>
+        </button>
       </header>
-      <main className="flex-1 overflow-y-auto px-4 py-6 pb-24">
+
+      <main className="p-6 max-w-lg mx-auto">
         {activeTab === 'HOME' && <Dashboard appState={appState} />}
         {activeTab === 'DEPOSITS' && <DepositsPage appState={appState} refresh={fetchData} isManager={isManager} />}
         {activeTab === 'LOANS' && <LoansPage appState={appState} setAppState={setAppState} isManager={isManager} />}
         {activeTab === 'INBOX' && <InboxPage appState={appState} setAppState={setAppState} isManager={isManager} />}
         {activeTab === 'DEV' && <DevProfile appState={appState} setAppState={setAppState} isManager={isManager} />}
       </main>
-      <nav className="fixed bottom-0 left-0 right-0 bg-white border-t bottom-nav-shadow px-2 py-2 z-50">
-        <div className="max-w-md mx-auto flex justify-between items-center">
-          <NavItem icon="fa-grip" label="HOME" active={activeTab === 'HOME'} onClick={() => setActiveTab('HOME')} />
-          <NavItem icon="fa-wallet" label="DEPOSITS" active={activeTab === 'DEPOSITS'} onClick={() => setActiveTab('DEPOSITS')} />
-          <NavItem icon="fa-hand-holding-dollar" label="LOANS" active={activeTab === 'LOANS'} onClick={() => setActiveTab('LOANS')} />
-          <NavItem icon="fa-user-group" label="INBOX" active={activeTab === 'INBOX'} onClick={() => setActiveTab('INBOX')} badge={appState.users.filter(u => u.status === UserStatus.PENDING).length} />
-          <NavItem icon="fa-code" label="DEV" active={activeTab === 'DEV'} onClick={() => setActiveTab('DEV')} />
-        </div>
+
+      <nav className="fixed bottom-6 left-6 right-6 bg-slate-900/95 backdrop-blur-lg rounded-[2.5rem] p-2 flex justify-between items-center shadow-2xl z-50 border border-white/10 max-w-lg mx-auto">
+        <NavBtn active={activeTab === 'HOME'} onClick={() => setActiveTab('HOME')} icon="fa-house" />
+        <NavBtn active={activeTab === 'DEPOSITS'} onClick={() => setActiveTab('DEPOSITS')} icon="fa-sack-dollar" />
+        <NavBtn active={activeTab === 'LOANS'} onClick={() => setActiveTab('LOANS')} icon="fa-handshake-angle" />
+        <NavBtn 
+          active={activeTab === 'INBOX'} 
+          onClick={() => setActiveTab('INBOX')} 
+          icon="fa-inbox" 
+          count={appState.users.filter(u => u.status === UserStatus.PENDING).length} 
+        />
+        <NavBtn active={activeTab === 'DEV'} onClick={() => setActiveTab('DEV')} icon="fa-user-gear" />
       </nav>
     </div>
   );
 };
 
-const NavItem: React.FC<{ icon: string; label: string; active: boolean; onClick: () => void; badge?: number }> = ({ icon, label, active, onClick, badge }) => (
-  <button onClick={onClick} className={`flex flex-col items-center justify-center w-16 py-1 relative transition-all duration-200 ${active ? 'text-indigo-600 scale-110' : 'text-slate-400'}`}>
-    {badge !== undefined && badge > 0 && <span className="absolute -top-1 right-2 bg-red-500 text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full ring-2 ring-white">{badge}</span>}
-    <div className={`p-2 rounded-xl ${active ? 'bg-indigo-50' : ''}`}><i className={`fa-solid ${icon} text-lg`}></i></div>
-    <span className="text-[10px] font-bold mt-0.5 tracking-tight uppercase">{label}</span>
-  </button>
-);
-
+// Fix: Added the missing default export
 export default App;
