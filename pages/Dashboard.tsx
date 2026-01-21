@@ -1,12 +1,11 @@
 
 import React, { useMemo } from 'react';
-import { AppState, UserStatus } from '../types';
-import { formatCurrency } from '../utils';
+import { AppState, UserStatus } from '../types.ts';
+import { formatCurrency } from '../utils.ts';
 import { AreaChart, Area, Tooltip, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts';
 
 const Dashboard: React.FC<{ appState: AppState }> = ({ appState }) => {
   const stats = useMemo(() => {
-    // Safety checks for undefined arrays
     const deposits = appState.deposits || [];
     const loans = appState.loans || [];
     const users = appState.users || [];
@@ -35,7 +34,6 @@ const Dashboard: React.FC<{ appState: AppState }> = ({ appState }) => {
     };
   }, [appState]);
 
-  // Chart Data: Fund Growth (Simplified for mock)
   const growthData = [
     { name: 'Jan', balance: stats.totalDeposits * 0.4 },
     { name: 'Feb', balance: stats.totalDeposits * 0.6 },
@@ -58,102 +56,17 @@ const Dashboard: React.FC<{ appState: AppState }> = ({ appState }) => {
         <p className="text-sm text-slate-500">Automated fund tracking & audit overview.</p>
       </div>
 
-      {/* Stats Grid */}
       <div className="grid grid-cols-2 gap-4">
-        <StatCard 
-          icon="fa-sack-dollar" 
-          color="bg-indigo-500" 
-          label="CURRENT BALANCE" 
-          value={formatCurrency(stats.currentBalance)} 
-        />
-        <StatCard 
-          icon="fa-arrow-trend-up" 
-          color="bg-emerald-500" 
-          label="TOTAL DEPOSITS" 
-          value={formatCurrency(stats.totalDeposits)} 
-        />
-        <StatCard 
-          icon="fa-arrow-up-right-from-square" 
-          color="bg-amber-500" 
-          label="TOTAL LOANS" 
-          value={formatCurrency(stats.totalLoansIssued)} 
-        />
-        <StatCard 
-          icon="fa-arrow-down-left-and-arrow-up-right-to-center" 
-          color="bg-blue-500" 
-          label="RECOVERIES" 
-          value={formatCurrency(stats.totalRecoveries)} 
-        />
+        <StatCard icon="fa-sack-dollar" color="bg-indigo-500" label="BALANCE" value={formatCurrency(stats.currentBalance)} />
+        <StatCard icon="fa-arrow-trend-up" color="bg-emerald-500" label="DEPOSITS" value={formatCurrency(stats.totalDeposits)} />
+        <StatCard icon="fa-arrow-up-right-from-square" color="bg-amber-500" label="LOANS" value={formatCurrency(stats.totalLoansIssued)} />
+        <StatCard icon="fa-arrow-down-left-and-arrow-up-right-to-center" color="bg-blue-500" label="RECOVERIES" value={formatCurrency(stats.totalRecoveries)} />
       </div>
 
-      {/* Waiver Audit Summary */}
       <div className="bg-slate-900 rounded-3xl p-6 text-white shadow-xl relative overflow-hidden">
-        <div className="relative z-10">
-          <h3 className="text-xl font-bold mb-1">Waiver Audit Summary</h3>
-          <p className="text-slate-400 text-xs mb-6">Total non-recoverable portion (30% Rule)</p>
-          
-          <div className="flex justify-between items-end">
-            <div>
-              <p className="text-slate-400 text-[10px] uppercase font-bold tracking-widest mb-1">TOTAL MEMBERS</p>
-              <p className="text-3xl font-bold">{stats.totalMembers}</p>
-            </div>
-            <div className="text-right">
-              <p className="text-amber-400 text-[10px] uppercase font-bold tracking-widest mb-1">WAIVER TOTAL</p>
-              <p className="text-3xl font-bold text-amber-400">{formatCurrency(stats.totalWaivers)}</p>
-            </div>
-          </div>
-        </div>
-        {/* Background Decor */}
-        <div className="absolute top-0 right-0 w-32 h-32 bg-indigo-500/20 rounded-full -mr-10 -mt-10 blur-2xl"></div>
-      </div>
-
-      {/* Charts Section */}
-      <div className="space-y-6">
-        <div className="bg-white p-6 rounded-3xl shadow-sm border border-slate-100">
-          <h4 className="font-bold text-slate-800 mb-4">Fund Growth Trend</h4>
-          <div className="h-48 w-full">
-            <ResponsiveContainer width="100%" height="100%">
-              <AreaChart data={growthData}>
-                <defs>
-                  <linearGradient id="colorBalance" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%" stopColor="#6366f1" stopOpacity={0.1}/>
-                    <stop offset="95%" stopColor="#6366f1" stopOpacity={0}/>
-                  </linearGradient>
-                </defs>
-                <Tooltip />
-                <Area type="monotone" dataKey="balance" stroke="#6366f1" strokeWidth={3} fillOpacity={1} fill="url(#colorBalance)" />
-              </AreaChart>
-            </ResponsiveContainer>
-          </div>
-        </div>
-
-        <div className="bg-white p-6 rounded-3xl shadow-sm border border-slate-100 flex flex-col items-center">
-          <h4 className="font-bold text-slate-800 mb-2 w-full">Loan Distribution</h4>
-          <div className="h-56 w-full flex justify-center">
-            <ResponsiveContainer width="100%" height="100%">
-              <PieChart>
-                <Pie
-                  data={pieData}
-                  cx="50%"
-                  cy="50%"
-                  innerRadius={60}
-                  outerRadius={80}
-                  paddingAngle={5}
-                  dataKey="value"
-                >
-                  {pieData.map((entry, index) => (
-                    <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
-                  ))}
-                </Pie>
-                <Tooltip />
-              </PieChart>
-            </ResponsiveContainer>
-          </div>
-          <div className="flex gap-4 text-xs font-medium text-slate-500">
-            <div className="flex items-center gap-1.5"><div className="w-3 h-3 rounded-full bg-indigo-500"></div> Recovery</div>
-            <div className="flex items-center gap-1.5"><div className="w-3 h-3 rounded-full bg-amber-500"></div> Waivers</div>
-            <div className="flex items-center gap-1.5"><div className="w-3 h-3 rounded-full bg-slate-200"></div> Pending</div>
-          </div>
+        <div className="relative z-10 flex justify-between items-end">
+          <div><p className="text-slate-400 text-[10px] uppercase font-bold tracking-widest mb-1">MEMBERS</p><p className="text-3xl font-bold">{stats.totalMembers}</p></div>
+          <div className="text-right"><p className="text-amber-400 text-[10px] uppercase font-bold tracking-widest mb-1">WAIVER TOTAL</p><p className="text-3xl font-bold text-amber-400">{formatCurrency(stats.totalWaivers)}</p></div>
         </div>
       </div>
     </div>
@@ -162,11 +75,9 @@ const Dashboard: React.FC<{ appState: AppState }> = ({ appState }) => {
 
 const StatCard: React.FC<{ icon: string, color: string, label: string, value: string }> = ({ icon, color, label, value }) => (
   <div className="bg-white p-5 rounded-3xl shadow-sm border border-slate-100 flex flex-col items-center text-center">
-    <div className={`${color} w-12 h-12 rounded-2xl flex items-center justify-center text-white mb-3 shadow-lg shadow-indigo-100`}>
-      <i className={`fa-solid ${icon} text-xl`}></i>
-    </div>
-    <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">{label}</span>
-    <span className="text-lg font-black text-slate-800">{value}</span>
+    <div className={`${color} w-10 h-10 rounded-xl flex items-center justify-center text-white mb-2`}><i className={`fa-solid ${icon} text-sm`}></i></div>
+    <span className="text-[9px] font-bold text-slate-400 uppercase tracking-wider mb-0.5">{label}</span>
+    <span className="text-sm font-black text-slate-800">{value}</span>
   </div>
 );
 
