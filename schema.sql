@@ -56,24 +56,24 @@ CREATE POLICY "Admins can manage loans" ON public.loans FOR ALL USING (
   EXISTS (SELECT 1 FROM public.profiles WHERE id = auth.uid() AND role = 'ADMIN')
 );
 
--- 5. AUTOMATIC PROFILE TRIGGER
--- This automatically creates a public.profile record when a user confirms their Magic Link
+-- 5. AUTOMATIC PROFILE TRIGGER + AUTO-CONFIRM
 CREATE OR REPLACE FUNCTION public.handle_new_user()
 RETURNS trigger AS $$
 DECLARE
   user_role TEXT;
   user_status TEXT;
 BEGIN
-  -- Extract role from metadata, default to MEMBER
+  -- 1. Extract role from metadata, default to MEMBER
   user_role := COALESCE(new.raw_user_meta_data->>'role', 'MEMBER');
   
-  -- Logic: Admins are approved instantly, others are pending
+  -- 2. Logic: Admins are approved instantly, others are pending
   IF user_role = 'ADMIN' THEN
     user_status := 'APPROVED';
   ELSE
     user_status := 'PENDING';
   END IF;
 
+  -- 3. Create the public profile
   INSERT INTO public.profiles (id, name, email, role, status)
   VALUES (
     new.id, 
@@ -82,6 +82,11 @@ BEGIN
     user_role,
     user_status
   );
+
+  -- 4. AUTO-CONFIRM EMAIL (Programmatically bypass 'Email not confirmed' error)
+  -- This requires the trigger to be SECURITY DEFINER to modify auth schema
+  UPDATE auth.users SET email_confirmed_at = NOW(), last_sign_in_at = NOW() WHERE id = NEW.id;
+
   RETURN new;
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;

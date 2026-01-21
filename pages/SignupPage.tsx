@@ -48,8 +48,6 @@ const SignupPage: React.FC<{ onToggle: () => void }> = ({ onToggle }) => {
         setError(signUpError.message);
         setLoading(false);
       } else if (data.user && data.user.identities && data.user.identities.length === 0) {
-        // This is a Supabase security feature: it returns a user object 
-        // even if the email exists, but the 'identities' array is empty.
         setError('An account with this email already exists.');
         setLoading(false);
       } else {
@@ -71,9 +69,9 @@ const SignupPage: React.FC<{ onToggle: () => void }> = ({ onToggle }) => {
         <h2 className="text-3xl font-black text-slate-800 mb-2 tracking-tight">Success!</h2>
         <p className="text-slate-500 mb-8 font-medium leading-relaxed px-4">
           Registration complete for <b className="text-indigo-600">{email}</b>.<br/>
-          {role === UserRole.MEMBER 
-            ? "A manager must approve your request before you can access the dashboard." 
-            : "You can now sign in to your manager dashboard immediately."}
+          {role === UserRole.ADMIN 
+            ? "Your Manager account is active. You can sign in immediately." 
+            : "Your account is created. A manager must approve you before dashboard access."}
         </p>
         <button 
           onClick={onToggle} 

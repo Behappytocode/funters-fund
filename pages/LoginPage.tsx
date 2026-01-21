@@ -29,8 +29,9 @@ const LoginPage: React.FC<{ onToggle: () => void }> = ({ onToggle }) => {
       });
 
       if (authError) {
-        // Map common errors to user-friendly messages
-        if (authError.message.includes('Invalid login credentials')) {
+        if (authError.message.toLowerCase().includes('email not confirmed')) {
+          setError('Email confirmation required. Please check your inbox (including Spam) or ask a Manager to verify your account.');
+        } else if (authError.message.includes('Invalid login credentials')) {
           setError('Invalid email or password. Please try again.');
         } else {
           setError(authError.message);
@@ -52,8 +53,9 @@ const LoginPage: React.FC<{ onToggle: () => void }> = ({ onToggle }) => {
       </div>
 
       {error && (
-        <div className="bg-rose-50 text-rose-500 p-4 rounded-2xl text-xs font-bold mb-6 border border-rose-100 flex items-center gap-2 animate-in fade-in slide-in-from-top-2">
-          <i className="fa-solid fa-circle-exclamation"></i> <span>{error}</span>
+        <div className="bg-rose-50 text-rose-500 p-4 rounded-2xl text-xs font-bold mb-6 border border-rose-100 flex items-start gap-3 animate-in fade-in slide-in-from-top-2">
+          <i className="fa-solid fa-circle-exclamation mt-0.5"></i> 
+          <span className="leading-tight">{error}</span>
         </div>
       )}
 
