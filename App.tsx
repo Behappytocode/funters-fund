@@ -2,7 +2,7 @@
 import React, { useState, useEffect } from 'react';
 import { User, UserRole, UserStatus, AppState } from './types.ts';
 import { INITIAL_DEVELOPER, LOGO } from './constants.tsx';
-import { supabase, isSupabaseConfigured, configStatus } from './supabase.ts';
+import { supabase, isSupabaseConfigured, configStatus, saveManualConfig } from './supabase.ts';
 
 // Pages
 import Dashboard from './pages/Dashboard.tsx';
@@ -42,6 +42,9 @@ const App: React.FC = () => {
   const [activeTab, setActiveTab] = useState<'HOME' | 'DEPOSITS' | 'LOANS' | 'INBOX' | 'DEV'>('HOME');
   const [isLoginView, setIsLoginView] = useState(true);
   const [loading, setLoading] = useState(isSupabaseConfigured);
+  const [showManualForm, setShowManualForm] = useState(false);
+  const [manualUrl, setManualUrl] = useState('');
+  const [manualKey, setManualKey] = useState('');
   
   const [appState, setAppState] = useState<AppState>({
     currentUser: null,
@@ -50,6 +53,13 @@ const App: React.FC = () => {
     loans: [],
     developerInfo: INITIAL_DEVELOPER
   });
+
+  const handleManualSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (manualUrl && manualKey) {
+      saveManualConfig(manualUrl, manualKey);
+    }
+  };
 
   const logout = async () => {
     if (isSupabaseConfigured) await supabase.auth.signOut();
@@ -157,12 +167,64 @@ const App: React.FC = () => {
           <div className="w-24 h-24 bg-indigo-50 text-indigo-600 rounded-full flex items-center justify-center mx-auto mb-8 animate-bounce">
             <i className="fa-solid fa-cloud-bolt text-4xl"></i>
           </div>
-          <h2 className="text-3xl font-black text-slate-800 mb-4 tracking-tight">Syncing Required</h2>
-          <div className="space-y-3 mb-8">
-            <ConfigRow label="VITE_SUPABASE_URL" active={configStatus.url} />
-            <ConfigRow label="VITE_SUPABASE_ANON_KEY" active={configStatus.key} />
-          </div>
-          <button onClick={() => window.location.reload()} className="w-full bg-indigo-600 text-white py-4 rounded-2xl font-black text-xs uppercase tracking-widest shadow-xl">Check Again</button>
+          <h2 className="text-3xl font-black text-slate-800 mb-2 tracking-tight">Sync Required</h2>
+          <p className="text-slate-400 text-sm font-medium mb-8 italic">Environment variables not detected.</p>
+          
+          {!showManualForm ? (
+            <div className="space-y-6">
+              <div className="space-y-3">
+                <ConfigRow label="SUPABASE_URL" active={configStatus.url} />
+                <ConfigRow label="SUPABASE_ANON_KEY" active={configStatus.key} />
+              </div>
+              <div className="space-y-3">
+                <button 
+                  onClick={() => window.location.reload()} 
+                  className="w-full bg-indigo-600 text-white py-4 rounded-2xl font-black text-xs uppercase tracking-widest shadow-xl shadow-indigo-100 active:scale-95 transition-all"
+                >
+                  Retry Connection
+                </button>
+                <button 
+                  onClick={() => setShowManualForm(true)} 
+                  className="w-full bg-slate-50 text-slate-500 py-4 rounded-2xl font-bold text-xs uppercase tracking-widest border border-slate-100"
+                >
+                  Configure Manually
+                </button>
+              </div>
+            </div>
+          ) : (
+            <form onSubmit={handleManualSubmit} className="space-y-4 text-left">
+              <div>
+                <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1 ml-1">Project URL</label>
+                <input 
+                  type="text" required value={manualUrl} onChange={e => setManualUrl(e.target.value)}
+                  placeholder="https://xxx.supabase.co"
+                  className="w-full bg-slate-50 border border-slate-200 px-4 py-3 rounded-xl text-xs focus:ring-2 focus:ring-indigo-500 outline-none"
+                />
+              </div>
+              <div>
+                <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1 ml-1">Anon Key</label>
+                <input 
+                  type="text" required value={manualKey} onChange={e => setManualKey(e.target.value)}
+                  placeholder="eyJhbGciOiJIUzI1NiI..."
+                  className="w-full bg-slate-50 border border-slate-200 px-4 py-3 rounded-xl text-xs focus:ring-2 focus:ring-indigo-500 outline-none"
+                />
+              </div>
+              <div className="flex gap-2 pt-2">
+                <button 
+                  type="button" onClick={() => setShowManualForm(false)}
+                  className="flex-1 bg-slate-100 text-slate-500 py-4 rounded-2xl font-black text-xs uppercase tracking-widest"
+                >
+                  Cancel
+                </button>
+                <button 
+                  type="submit"
+                  className="flex-[2] bg-indigo-600 text-white py-4 rounded-2xl font-black text-xs uppercase tracking-widest shadow-xl shadow-indigo-100"
+                >
+                  Save Config
+                </button>
+              </div>
+            </form>
+          )}
         </div>
       </div>
     );
@@ -172,7 +234,7 @@ const App: React.FC = () => {
     return (
       <div className="min-h-screen flex flex-col items-center justify-center bg-white">
         <div className="animate-spin rounded-full h-16 w-16 border-t-4 border-b-4 border-indigo-600"></div>
-        <p className="mt-6 text-xs font-black text-slate-400 uppercase tracking-widest">Opening Vault...</p>
+        <p className="mt-6 text-xs font-black text-slate-400 uppercase tracking-widest animate-pulse">Opening Vault...</p>
       </div>
     );
   }
@@ -181,18 +243,25 @@ const App: React.FC = () => {
     return isLoginView ? <LoginPage onToggle={() => setIsLoginView(false)} /> : <SignupPage onToggle={() => setIsLoginView(true)} />;
   }
 
-  // Handle "PENDING" members who have signed up but aren't approved yet
+  // Pending Status Screen
   if (appState.currentUser.status === UserStatus.PENDING) {
     return (
-      <div className="min-h-screen bg-white p-8 flex flex-col justify-center items-center text-center max-w-md mx-auto">
-        <div className="w-24 h-24 bg-amber-50 text-amber-500 rounded-full flex items-center justify-center mb-6 border border-amber-100">
-          <i className="fa-solid fa-hourglass-start text-4xl"></i>
+      <div className="min-h-screen bg-slate-50 p-8 flex flex-col justify-center items-center text-center max-w-md mx-auto">
+        <div className="bg-white p-10 rounded-[40px] shadow-2xl w-full border border-indigo-50">
+          <div className="w-24 h-24 bg-amber-50 text-amber-500 rounded-full flex items-center justify-center mb-6 border border-amber-100 mx-auto">
+            <i className="fa-solid fa-hourglass-start text-4xl"></i>
+          </div>
+          <h2 className="text-3xl font-black text-slate-800 mb-2">Request Pending</h2>
+          <p className="text-slate-500 mb-8 font-medium leading-relaxed">
+            Welcome, <b>{appState.currentUser.name}</b>!<br/>Your request is being reviewed by a manager. Please try again later.
+          </p>
+          <button 
+            onClick={logout} 
+            className="w-full bg-slate-100 text-slate-600 font-black py-5 rounded-2xl border border-slate-200 hover:bg-slate-200 transition-colors"
+          >
+            Sign Out
+          </button>
         </div>
-        <h2 className="text-3xl font-black text-slate-800 mb-2">Request Pending</h2>
-        <p className="text-slate-500 mb-8 font-medium">
-          Welcome, {appState.currentUser.name}! Your membership request is currently being reviewed by a Fund Manager. Please check back later.
-        </p>
-        <button onClick={logout} className="w-full bg-slate-100 text-slate-600 font-black py-5 rounded-2xl border border-slate-200">Sign Out</button>
       </div>
     );
   }
