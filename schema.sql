@@ -2,7 +2,6 @@
 -- RUN THIS IN YOUR SUPABASE SQL EDITOR
 
 -- 1. PROFILES TABLE
--- This stores the app-specific user data linked to Auth
 CREATE TABLE IF NOT EXISTS public.profiles (
   id UUID REFERENCES auth.users ON DELETE CASCADE PRIMARY KEY,
   name TEXT NOT NULL,
@@ -29,7 +28,7 @@ CREATE TABLE IF NOT EXISTS public.loans (
   total_amount NUMERIC NOT NULL,
   recoverable_amount NUMERIC NOT NULL,
   waiver_amount NUMERIC NOT NULL,
-  status TEXT DEFAULT 'ACTIVE', -- 'ACTIVE', 'COMPLETED'
+  status TEXT DEFAULT 'ACTIVE',
   issue_date DATE NOT NULL DEFAULT CURRENT_DATE,
   term_months INTEGER NOT NULL DEFAULT 6,
   installments JSONB DEFAULT '[]'::jsonb,
@@ -41,44 +40,53 @@ ALTER TABLE public.profiles ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.deposits ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.loans ENABLE ROW LEVEL SECURITY;
 
--- Policies
-CREATE POLICY "Public profiles are viewable by everyone" ON public.profiles FOR SELECT USING (true);
-CREATE POLICY "Users can update their own profile" ON public.profiles FOR UPDATE USING (auth.uid() = id);
-CREATE POLICY "Admins can update any profile" ON public.profiles FOR UPDATE USING (
+-- Select Policies
+CREATE POLICY "Public profiles selectable by everyone" ON public.profiles FOR SELECT USING (true);
+CREATE POLICY "Public deposits selectable by everyone" ON public.deposits FOR SELECT USING (true);
+CREATE POLICY "Public loans selectable by everyone" ON public.loans FOR SELECT USING (true);
+
+-- Admin Management Policies
+CREATE POLICY "Admins can manage everything" ON public.profiles FOR ALL USING (
   EXISTS (SELECT 1 FROM public.profiles WHERE id = auth.uid() AND role = 'ADMIN')
 );
-
-CREATE POLICY "Deposits viewable by everyone" ON public.deposits FOR SELECT USING (true);
-CREATE POLICY "Admins manage deposits" ON public.deposits FOR ALL USING (
+CREATE POLICY "Admins can manage deposits" ON public.deposits FOR ALL USING (
   EXISTS (SELECT 1 FROM public.profiles WHERE id = auth.uid() AND role = 'ADMIN')
 );
-
-CREATE POLICY "Loans viewable by everyone" ON public.loans FOR SELECT USING (true);
-CREATE POLICY "Admins manage loans" ON public.loans FOR ALL USING (
+CREATE POLICY "Admins can manage loans" ON public.loans FOR ALL USING (
   EXISTS (SELECT 1 FROM public.profiles WHERE id = auth.uid() AND role = 'ADMIN')
 );
 
 -- 5. AUTOMATIC PROFILE TRIGGER
--- This handles the creation of a profile record when a user verifies their Magic Link
+-- This automatically creates a public.profile record when a user confirms their Magic Link
 CREATE OR REPLACE FUNCTION public.handle_new_user()
 RETURNS trigger AS $$
+DECLARE
+  user_role TEXT;
+  user_status TEXT;
 BEGIN
+  -- Extract role from metadata, default to MEMBER
+  user_role := COALESCE(new.raw_user_meta_data->>'role', 'MEMBER');
+  
+  -- Logic: Admins are approved instantly, others are pending
+  IF user_role = 'ADMIN' THEN
+    user_status := 'APPROVED';
+  ELSE
+    user_status := 'PENDING';
+  END IF;
+
   INSERT INTO public.profiles (id, name, email, role, status)
   VALUES (
     new.id, 
-    COALESCE(new.raw_user_meta_data->>'full_name', 'New Member'), 
+    COALESCE(new.raw_user_meta_data->>'full_name', split_part(new.email, '@', 1)), 
     new.email,
-    COALESCE(new.raw_user_meta_data->>'role', 'MEMBER'),
-    CASE 
-      WHEN (new.raw_user_meta_data->>'role') = 'ADMIN' THEN 'APPROVED'
-      ELSE 'PENDING'
-    END
+    user_role,
+    user_status
   );
   RETURN new;
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
 
--- Cleanup existing trigger if re-running
+-- Cleanup existing trigger
 DROP TRIGGER IF EXISTS on_auth_user_created ON auth.users;
 
 CREATE TRIGGER on_auth_user_created
