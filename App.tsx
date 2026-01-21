@@ -32,14 +32,26 @@ const App: React.FC = () => {
       return;
     }
 
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      if (session) fetchUserData(session.user.id);
-      else setLoading(false);
-    });
+    const checkSession = async () => {
+      try {
+        const { data: { session } } = await supabase.auth.getSession();
+        if (session) {
+          await fetchUserData(session.user.id);
+        } else {
+          setLoading(false);
+        }
+      } catch (err) {
+        console.error("Auth check failed:", err);
+        setLoading(false);
+      }
+    };
+
+    checkSession();
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
-      if (session) fetchUserData(session.user.id);
-      else {
+      if (session) {
+        fetchUserData(session.user.id);
+      } else {
         setAppState(prev => ({ ...prev, currentUser: null }));
         setLoading(false);
       }
@@ -68,17 +80,22 @@ const App: React.FC = () => {
 
   const fetchUserData = async (userId: string) => {
     if (!isSupabaseConfigured) return;
-    const { data: profile } = await supabase
-      .from('profiles')
-      .select('*')
-      .eq('id', userId)
-      .single();
+    try {
+      const { data: profile } = await supabase
+        .from('profiles')
+        .select('*')
+        .eq('id', userId)
+        .single();
 
-    if (profile) {
-      setAppState(prev => ({ ...prev, currentUser: profile }));
-      await fetchData();
+      if (profile) {
+        setAppState(prev => ({ ...prev, currentUser: profile }));
+        await fetchData();
+      }
+    } catch (err) {
+      console.error("Profile fetch error:", err);
+    } finally {
+      setLoading(false);
     }
-    setLoading(false);
   };
 
   const logout = async () => {
@@ -90,19 +107,44 @@ const App: React.FC = () => {
   if (!isSupabaseConfigured) {
     return (
       <div className="min-h-screen bg-slate-50 flex flex-col items-center justify-center p-6 text-center">
-        <div className="bg-white p-8 rounded-3xl shadow-xl max-w-md w-full border border-indigo-100">
-          <div className="w-20 h-20 bg-indigo-50 text-indigo-600 rounded-full flex items-center justify-center mx-auto mb-6">
-            <i className="fa-solid fa-database text-3xl"></i>
+        <div className="bg-white p-10 rounded-[40px] shadow-2xl max-w-md w-full border border-indigo-100">
+          <div className="w-24 h-24 bg-indigo-50 text-indigo-600 rounded-full flex items-center justify-center mx-auto mb-8 animate-pulse">
+            <i className="fa-solid fa-cloud-bolt text-4xl"></i>
           </div>
-          <h2 className="text-2xl font-black text-slate-800 mb-4">Connection Required</h2>
-          <p className="text-slate-500 mb-6 text-sm">Please set VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY in Vercel settings to proceed.</p>
+          <h2 className="text-3xl font-black text-slate-800 mb-4 tracking-tight">Syncing Required</h2>
+          <p className="text-slate-500 mb-8 text-sm leading-relaxed">
+            The app is deployed but cannot find your Supabase keys. Please ensure your environment variables in Vercel are exactly:
+          </p>
+          <div className="space-y-3 mb-8">
+            <div className="bg-slate-50 p-4 rounded-2xl border border-slate-100 flex justify-between items-center group">
+              <code className="text-xs font-bold text-indigo-600">VITE_SUPABASE_URL</code>
+              <i className="fa-solid fa-circle-check text-slate-200 group-hover:text-emerald-400 transition-colors"></i>
+            </div>
+            <div className="bg-slate-50 p-4 rounded-2xl border border-slate-100 flex justify-between items-center group">
+              <code className="text-xs font-bold text-indigo-600">VITE_SUPABASE_ANON_KEY</code>
+              <i className="fa-solid fa-circle-check text-slate-200 group-hover:text-emerald-400 transition-colors"></i>
+            </div>
+          </div>
+          <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest">
+            Try Redeploying after adding keys
+          </p>
         </div>
       </div>
     );
   }
 
   if (loading) {
-    return <div className="min-h-screen flex items-center justify-center bg-white"><div className="animate-spin rounded-full h-12 w-12 border-t-2 border-indigo-600"></div></div>;
+    return (
+      <div className="min-h-screen flex flex-col items-center justify-center bg-white">
+        <div className="relative">
+          <div className="animate-spin rounded-full h-16 w-16 border-t-4 border-b-4 border-indigo-600"></div>
+          <div className="absolute inset-0 flex items-center justify-center">
+            <i className="fa-solid fa-handshake text-indigo-600"></i>
+          </div>
+        </div>
+        <p className="mt-6 text-xs font-black text-slate-400 uppercase tracking-[0.3em] animate-pulse">Connecting to Circle</p>
+      </div>
+    );
   }
 
   if (!appState.currentUser) {
