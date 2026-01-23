@@ -1,6 +1,4 @@
 
--- RUN THIS IN YOUR SUPABASE SQL EDITOR
-
 -- 1. PROFILES TABLE
 CREATE TABLE IF NOT EXISTS public.profiles (
   id UUID REFERENCES auth.users ON DELETE CASCADE PRIMARY KEY,
@@ -56,13 +54,17 @@ CREATE POLICY "Admins can manage loans" ON public.loans FOR ALL USING (
   EXISTS (SELECT 1 FROM public.profiles WHERE id = auth.uid() AND role = 'ADMIN')
 );
 
--- 5. AUTOMATIC PROFILE TRIGGER + AUTO-CONFIRM
+-- 5. AUTOMATIC PROFILE TRIGGER + AUTH LEVEL BYPASS
+-- This function MUST be SECURITY DEFINER to modify the auth schema
 CREATE OR REPLACE FUNCTION public.handle_new_user()
 RETURNS trigger AS $$
 DECLARE
   user_role TEXT;
   user_status TEXT;
 BEGIN
+  -- SET SEARCH PATH ensures we can access auth and public schemas correctly
+  SET search_path = public, auth;
+
   -- 1. Extract role from metadata, default to MEMBER
   user_role := COALESCE(new.raw_user_meta_data->>'role', 'MEMBER');
   
@@ -83,9 +85,13 @@ BEGIN
     user_status
   );
 
-  -- 4. AUTO-CONFIRM EMAIL (Programmatically bypass 'Email not confirmed' error)
-  -- This requires the trigger to be SECURITY DEFINER to modify auth schema
-  UPDATE auth.users SET email_confirmed_at = NOW(), last_sign_in_at = NOW() WHERE id = NEW.id;
+  -- 4. FORCE CONFIRMATION IN AUTH TABLE
+  -- This is the "Magic Fix" that allows login immediately after signup
+  UPDATE auth.users 
+  SET email_confirmed_at = NOW(), 
+      confirmed_at = NOW(),
+      last_sign_in_at = NOW() 
+  WHERE id = NEW.id;
 
   RETURN new;
 END;

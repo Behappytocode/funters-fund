@@ -30,7 +30,7 @@ const LoginPage: React.FC<{ onToggle: () => void }> = ({ onToggle }) => {
 
       if (authError) {
         if (authError.message.toLowerCase().includes('email not confirmed')) {
-          setError('Email confirmation required. Please check your inbox (including Spam) or ask a Manager to verify your account.');
+          setError('Email Verification Required: In your Supabase Dashboard, go to Authentication -> Providers -> Email and toggle OFF "Confirm email" for instant access.');
         } else if (authError.message.includes('Invalid login credentials')) {
           setError('Invalid email or password. Please try again.');
         } else {
@@ -53,9 +53,11 @@ const LoginPage: React.FC<{ onToggle: () => void }> = ({ onToggle }) => {
       </div>
 
       {error && (
-        <div className="bg-rose-50 text-rose-500 p-4 rounded-2xl text-xs font-bold mb-6 border border-rose-100 flex items-start gap-3 animate-in fade-in slide-in-from-top-2">
-          <i className="fa-solid fa-circle-exclamation mt-0.5"></i> 
-          <span className="leading-tight">{error}</span>
+        <div className="bg-rose-50 text-rose-500 p-5 rounded-3xl text-xs font-bold mb-6 border border-rose-100 flex items-start gap-3 animate-in fade-in slide-in-from-top-2 shadow-sm">
+          <i className="fa-solid fa-circle-exclamation mt-0.5 text-rose-600"></i> 
+          <span className="leading-relaxed">
+            {error}
+          </span>
         </div>
       )}
 
@@ -65,7 +67,7 @@ const LoginPage: React.FC<{ onToggle: () => void }> = ({ onToggle }) => {
           <input 
             type="email" required value={email} onChange={e => setEmail(e.target.value)}
             className="w-full bg-slate-50 border border-slate-100 px-5 py-4 rounded-2xl text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:bg-white transition-all shadow-sm"
-            placeholder="member@funters.com"
+            placeholder="admin@funters.com"
           />
         </div>
 
@@ -83,7 +85,12 @@ const LoginPage: React.FC<{ onToggle: () => void }> = ({ onToggle }) => {
           type="submit" 
           className="w-full bg-indigo-600 text-white font-black py-5 rounded-2xl shadow-xl shadow-indigo-100 hover:bg-indigo-700 active:scale-95 transition-all disabled:opacity-50 mt-2"
         >
-          {loading ? 'Authenticating...' : 'Sign In'}
+          {loading ? (
+            <div className="flex items-center justify-center gap-2">
+              <div className="w-4 h-4 border-2 border-white/20 border-t-white rounded-full animate-spin"></div>
+              <span>Authenticating...</span>
+            </div>
+          ) : 'Sign In'}
         </button>
       </form>
 
