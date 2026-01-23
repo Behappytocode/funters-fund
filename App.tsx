@@ -1,5 +1,5 @@
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { User, UserRole, UserStatus, AppState } from './types.ts';
 import { INITIAL_DEVELOPER, LOGO } from './constants.tsx';
 import { supabase, isSupabaseConfigured, configStatus, saveManualConfig } from './supabase.ts';
@@ -46,6 +46,9 @@ const App: React.FC = () => {
   const [manualUrl, setManualUrl] = useState('');
   const [manualKey, setManualKey] = useState('');
   
+  const retryCount = useRef(0);
+  const maxRetries = 3;
+
   const [appState, setAppState] = useState<AppState>({
     currentUser: null,
     users: [],
@@ -66,6 +69,7 @@ const App: React.FC = () => {
     setActiveTab('HOME');
     setIsLoginView(true);
     setAppState(prev => ({ ...prev, currentUser: null }));
+    retryCount.current = 0;
   };
 
   useEffect(() => {
@@ -92,6 +96,7 @@ const App: React.FC = () => {
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
       if (session) {
+        retryCount.current = 0;
         fetchUserData(session.user.id);
       } else {
         setAppState(prev => ({ ...prev, currentUser: null }));
@@ -141,6 +146,7 @@ const App: React.FC = () => {
 
   const fetchUserData = async (userId: string) => {
     if (!isSupabaseConfigured) return;
+    
     try {
       const { data: profile, error } = await supabase
         .from('profiles')
@@ -149,19 +155,46 @@ const App: React.FC = () => {
         .single();
 
       if (error) {
-        // If profile doesn't exist yet (trigger delay), retry once
-        console.warn("Profile not found, waiting for trigger...");
-        setTimeout(() => fetchUserData(userId), 2000);
-        return;
+        if (retryCount.current < maxRetries) {
+          retryCount.current += 1;
+          console.warn(`Profile missing (Attempt ${retryCount.current}/${maxRetries}), retrying...`);
+          setTimeout(() => fetchUserData(userId), 2000);
+          return;
+        } else {
+          // Max retries reached - attempt auto-repair if we have session data
+          const { data: { session } } = await supabase.auth.getSession();
+          if (session) {
+            console.info("Attempting auto-repair of missing profile...");
+            const { data: newProfile, error: repairError } = await supabase
+              .from('profiles')
+              .insert({
+                id: userId,
+                email: session.user.email,
+                name: session.user.user_metadata?.full_name || session.user.email?.split('@')[0],
+                role: session.user.user_metadata?.role || 'MEMBER',
+                status: session.user.user_metadata?.role === 'ADMIN' ? 'APPROVED' : 'PENDING'
+              })
+              .select()
+              .single();
+            
+            if (!repairError && newProfile) {
+              setAppState(prev => ({ ...prev, currentUser: newProfile as User }));
+              await fetchData();
+              setLoading(false);
+              return;
+            }
+          }
+          throw new Error("Could not find or repair user profile record.");
+        }
       }
 
       if (profile) {
         setAppState(prev => ({ ...prev, currentUser: profile as User }));
         await fetchData();
+        setLoading(false);
       }
     } catch (err) {
       console.error("Profile fetch error:", err);
-    } finally {
       setLoading(false);
     }
   };
@@ -240,7 +273,7 @@ const App: React.FC = () => {
     return (
       <div className="min-h-screen flex flex-col items-center justify-center bg-white">
         <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-indigo-600"></div>
-        <p className="mt-6 text-[10px] font-black text-slate-400 uppercase tracking-widest animate-pulse">Checking Permissions...</p>
+        <p className="mt-6 text-[10px] font-black text-slate-400 uppercase tracking-widest animate-pulse">Establishing Secure Session...</p>
       </div>
     );
   }

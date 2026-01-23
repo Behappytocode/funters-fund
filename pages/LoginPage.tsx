@@ -37,6 +37,10 @@ const LoginPage: React.FC<{ onToggle: () => void }> = ({ onToggle }) => {
           setError(authError.message);
         }
         setLoading(false);
+      } else {
+        // Success - we let the App.tsx state listener take over, 
+        // but we reset local loading just in case the redirect is slow
+        setLoading(false);
       }
     } catch (err) {
       setError('An unexpected error occurred. Please try again.');
