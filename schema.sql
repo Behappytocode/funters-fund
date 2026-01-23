@@ -54,52 +54,38 @@ CREATE POLICY "Admins can manage loans" ON public.loans FOR ALL USING (
   EXISTS (SELECT 1 FROM public.profiles WHERE id = auth.uid() AND role = 'ADMIN')
 );
 
--- 5. AUTOMATIC PROFILE TRIGGER + AUTH LEVEL BYPASS
--- This function MUST be SECURITY DEFINER to modify the auth schema
+-- 5. ROBUST AUTOMATIC PROFILE TRIGGER
 CREATE OR REPLACE FUNCTION public.handle_new_user()
 RETURNS trigger AS $$
-DECLARE
-  user_role TEXT;
-  user_status TEXT;
 BEGIN
-  -- SET SEARCH PATH ensures we can access auth and public schemas correctly
-  SET search_path = public, auth;
-
-  -- 1. Extract role from metadata, default to MEMBER
-  user_role := COALESCE(new.raw_user_meta_data->>'role', 'MEMBER');
-  
-  -- 2. Logic: Admins are approved instantly, others are pending
-  IF user_role = 'ADMIN' THEN
-    user_status := 'APPROVED';
-  ELSE
-    user_status := 'PENDING';
-  END IF;
-
-  -- 3. Create the public profile
+  -- 1. Create the public profile with robustness
+  -- We use explicit public. prefix and ON CONFLICT to prevent failures
   INSERT INTO public.profiles (id, name, email, role, status)
   VALUES (
     new.id, 
     COALESCE(new.raw_user_meta_data->>'full_name', split_part(new.email, '@', 1)), 
     new.email,
-    user_role,
-    user_status
-  );
+    COALESCE(new.raw_user_meta_data->>'role', 'MEMBER'),
+    CASE WHEN (new.raw_user_meta_data->>'role') = 'ADMIN' THEN 'APPROVED' ELSE 'PENDING' END
+  )
+  ON CONFLICT (id) DO UPDATE SET
+    name = EXCLUDED.name,
+    email = EXCLUDED.email,
+    role = EXCLUDED.role;
 
-  -- 4. FORCE CONFIRMATION IN AUTH TABLE
-  -- This is the "Magic Fix" that allows login immediately after signup
+  -- 2. Force confirm the email in the auth table
+  -- Note: This is required to bypass the 'Email not confirmed' error
   UPDATE auth.users 
   SET email_confirmed_at = NOW(), 
-      confirmed_at = NOW(),
-      last_sign_in_at = NOW() 
+      confirmed_at = NOW()
   WHERE id = NEW.id;
 
   RETURN new;
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
 
--- Cleanup existing trigger
+-- Cleanup and re-apply trigger
 DROP TRIGGER IF EXISTS on_auth_user_created ON auth.users;
-
 CREATE TRIGGER on_auth_user_created
   AFTER INSERT ON auth.users
   FOR EACH ROW EXECUTE PROCEDURE public.handle_new_user();

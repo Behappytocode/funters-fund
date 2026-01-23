@@ -16,7 +16,7 @@ const SignupPage: React.FC<{ onToggle: () => void }> = ({ onToggle }) => {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     const cleanName = name.trim();
-    const cleanEmail = email.trim();
+    const cleanEmail = email.trim().toLowerCase();
     const cleanPassword = password.trim();
 
     if (!cleanName || !cleanEmail || !cleanPassword) {
@@ -45,28 +45,27 @@ const SignupPage: React.FC<{ onToggle: () => void }> = ({ onToggle }) => {
       });
 
       if (signUpError) {
-        // Handle specific Supabase errors
-        if (signUpError.message.includes('User already registered')) {
+        if (signUpError.message.includes('Database error saving new user')) {
+          setError('CRITICAL: Supabase Database Trigger Failed. Please ensure you have executed the schema.sql code in your Supabase SQL Editor.');
+        } else if (signUpError.message.includes('User already registered')) {
           setError('This email is already registered. Try logging in.');
         } else {
           setError(signUpError.message);
         }
         setLoading(false);
       } else if (data.user && data.user.identities && data.user.identities.length === 0) {
-        // Supabase returns 0 identities if the email is taken (even if unconfirmed)
-        setError('This email address is already associated with an account.');
+        setError('This email is already taken. Please use a different one or log in.');
         setLoading(false);
       } else if (!data.user) {
-        setError('Signup failed for an unknown reason. Please try again.');
+        setError('Signup failed. Please try again or check your Supabase dashboard.');
         setLoading(false);
       } else {
-        // SUCCESS
         setSuccess(true);
         setLoading(false);
       }
     } catch (err) {
       console.error("Signup error:", err);
-      setError('A connection error occurred. Check your internet and Supabase configuration.');
+      setError('A system error occurred. Please check your Supabase keys and database status.');
       setLoading(false);
     }
   };
