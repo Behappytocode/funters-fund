@@ -45,17 +45,28 @@ const SignupPage: React.FC<{ onToggle: () => void }> = ({ onToggle }) => {
       });
 
       if (signUpError) {
-        setError(signUpError.message);
+        // Handle specific Supabase errors
+        if (signUpError.message.includes('User already registered')) {
+          setError('This email is already registered. Try logging in.');
+        } else {
+          setError(signUpError.message);
+        }
         setLoading(false);
       } else if (data.user && data.user.identities && data.user.identities.length === 0) {
-        setError('An account with this email already exists.');
+        // Supabase returns 0 identities if the email is taken (even if unconfirmed)
+        setError('This email address is already associated with an account.');
+        setLoading(false);
+      } else if (!data.user) {
+        setError('Signup failed for an unknown reason. Please try again.');
         setLoading(false);
       } else {
+        // SUCCESS
         setSuccess(true);
         setLoading(false);
       }
     } catch (err) {
-      setError('Signup failed. Please check your connection and try again.');
+      console.error("Signup error:", err);
+      setError('A connection error occurred. Check your internet and Supabase configuration.');
       setLoading(false);
     }
   };
@@ -66,18 +77,18 @@ const SignupPage: React.FC<{ onToggle: () => void }> = ({ onToggle }) => {
         <div className="w-24 h-24 bg-emerald-50 text-emerald-500 rounded-full flex items-center justify-center mb-6 border border-emerald-100 animate-in zoom-in duration-300">
           <i className="fa-solid fa-circle-check text-4xl"></i>
         </div>
-        <h2 className="text-3xl font-black text-slate-800 mb-2 tracking-tight">Success!</h2>
+        <h2 className="text-3xl font-black text-slate-800 mb-2 tracking-tight">Account Created!</h2>
         <p className="text-slate-500 mb-8 font-medium leading-relaxed px-4">
-          Registration complete for <b className="text-indigo-600">{email}</b>.<br/>
+          Welcome to the circle, <b className="text-indigo-600">{name}</b>.<br/>
           {role === UserRole.ADMIN 
             ? "Your Manager account is active. You can sign in immediately." 
-            : "Your account is created. A manager must approve you before dashboard access."}
+            : "Your request is sent. A manager must approve you before you can access the fund."}
         </p>
         <button 
           onClick={onToggle} 
           className="w-full bg-slate-900 text-white font-black py-5 rounded-2xl shadow-xl active:scale-95 transition-all"
         >
-          Proceed to Sign In
+          Go to Sign In
         </button>
       </div>
     );
@@ -92,8 +103,9 @@ const SignupPage: React.FC<{ onToggle: () => void }> = ({ onToggle }) => {
       </div>
 
       {error && (
-        <div className="bg-rose-50 text-rose-500 p-4 rounded-2xl text-xs font-bold mb-6 border border-rose-100 flex items-center gap-2 animate-in fade-in slide-in-from-top-2">
-          <i className="fa-solid fa-triangle-exclamation"></i> <span>{error}</span>
+        <div className="bg-rose-50 text-rose-500 p-5 rounded-3xl text-xs font-bold mb-6 border border-rose-100 flex items-start gap-3 animate-in fade-in slide-in-from-top-2 shadow-sm">
+          <i className="fa-solid fa-triangle-exclamation mt-0.5 text-rose-600"></i> 
+          <span className="leading-relaxed">{error}</span>
         </div>
       )}
 
@@ -150,7 +162,12 @@ const SignupPage: React.FC<{ onToggle: () => void }> = ({ onToggle }) => {
           type="submit" 
           className="w-full bg-slate-900 text-white font-black py-5 rounded-2xl shadow-xl active:scale-95 transition-all disabled:opacity-50 mt-4"
         >
-          {loading ? 'Creating Account...' : 'Sign Up'}
+          {loading ? (
+            <div className="flex items-center justify-center gap-2">
+              <div className="w-4 h-4 border-2 border-white/20 border-t-white rounded-full animate-spin"></div>
+              <span>Creating Account...</span>
+            </div>
+          ) : 'Sign Up'}
         </button>
       </form>
 

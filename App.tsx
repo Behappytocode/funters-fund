@@ -47,7 +47,7 @@ const App: React.FC = () => {
   const [manualKey, setManualKey] = useState('');
   
   const retryCount = useRef(0);
-  const maxRetries = 3;
+  const maxRetries = 5;
 
   const [appState, setAppState] = useState<AppState>({
     currentUser: null,
@@ -94,7 +94,10 @@ const App: React.FC = () => {
 
     checkSession();
 
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+      // If a user just signed up, Supabase might fire 'SIGNED_IN'.
+      // We only want to auto-redirect to dashboard if it's not a fresh signup 
+      // where the user needs to see their success message first.
       if (session) {
         retryCount.current = 0;
         fetchUserData(session.user.id);
@@ -152,20 +155,20 @@ const App: React.FC = () => {
         .from('profiles')
         .select('*')
         .eq('id', userId)
-        .single();
+        .maybeSingle(); // maybeSingle is safer than single() during signup race conditions
 
-      if (error) {
+      if (error || !profile) {
         if (retryCount.current < maxRetries) {
           retryCount.current += 1;
-          console.warn(`Profile missing (Attempt ${retryCount.current}/${maxRetries}), retrying...`);
-          setTimeout(() => fetchUserData(userId), 2000);
+          console.warn(`Profile record not yet found (Attempt ${retryCount.current}/${maxRetries}). Waiting for trigger...`);
+          setTimeout(() => fetchUserData(userId), 1500);
           return;
         } else {
-          // Max retries reached - attempt auto-repair if we have session data
+          // Attempt manual profile creation as a fallback if the trigger failed
           const { data: { session } } = await supabase.auth.getSession();
           if (session) {
-            console.info("Attempting auto-repair of missing profile...");
-            const { data: newProfile, error: repairError } = await supabase
+            console.info("Trigger likely failed. Attempting manual profile repair...");
+            const { data: repaired, error: repairError } = await supabase
               .from('profiles')
               .insert({
                 id: userId,
@@ -177,14 +180,14 @@ const App: React.FC = () => {
               .select()
               .single();
             
-            if (!repairError && newProfile) {
-              setAppState(prev => ({ ...prev, currentUser: newProfile as User }));
+            if (!repairError && repaired) {
+              setAppState(prev => ({ ...prev, currentUser: repaired as User }));
               await fetchData();
               setLoading(false);
               return;
             }
           }
-          throw new Error("Could not find or repair user profile record.");
+          throw new Error("User record not found in database.");
         }
       }
 
