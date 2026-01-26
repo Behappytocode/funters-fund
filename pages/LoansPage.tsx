@@ -1,16 +1,17 @@
-
 import React, { useState } from 'react';
-import { AppState, Loan, Installment, UserStatus } from '../types';
-import { formatCurrency, calculate7030, generateId } from '../utils';
+import { AppState, Installment, UserStatus } from '../types.ts';
+import { formatCurrency, calculate7030, generateId } from '../utils.ts';
+import { supabase } from '../supabase.ts';
 
 interface LoansPageProps {
   appState: AppState;
-  setAppState: React.Dispatch<React.SetStateAction<AppState>>;
+  refresh: () => void;
   isManager: boolean;
 }
 
-const LoansPage: React.FC<LoansPageProps> = ({ appState, setAppState, isManager }) => {
+const LoansPage: React.FC<LoansPageProps> = ({ appState, refresh, isManager }) => {
   const [showAdd, setShowAdd] = useState(false);
+  const [loading, setLoading] = useState(false);
   const [newLoan, setNewLoan] = useState({
     memberId: '',
     totalAmount: 0,
@@ -20,12 +21,12 @@ const LoansPage: React.FC<LoansPageProps> = ({ appState, setAppState, isManager 
 
   const members = appState.users.filter(u => u.status === UserStatus.APPROVED);
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!newLoan.memberId || !newLoan.totalAmount) return;
+    setLoading(true);
 
     const { recoverable, waiver } = calculate7030(newLoan.totalAmount);
-    const member = members.find(m => m.id === newLoan.memberId);
 
     // Generate installments
     const installmentAmount = Math.round(recoverable / newLoan.termMonths);
@@ -43,44 +44,56 @@ const LoansPage: React.FC<LoansPageProps> = ({ appState, setAppState, isManager 
       });
     }
 
-    const loan: Loan = {
-      id: generateId(),
-      memberId: newLoan.memberId,
-      memberName: member?.name || 'Unknown',
-      totalAmount: newLoan.totalAmount,
-      recoverableAmount: recoverable,
-      waiverAmount: waiver,
-      issueDate: newLoan.issueDate,
-      termMonths: newLoan.termMonths,
+    // Insert into DB
+    const { error } = await supabase.from('loans').insert({
+      member_id: newLoan.memberId,
+      total_amount: newLoan.totalAmount,
+      recoverable_amount: recoverable,
+      waiver_amount: waiver,
+      issue_date: newLoan.issueDate,
+      term_months: newLoan.termMonths,
       status: 'ACTIVE',
-      installments
-    };
+      installments: installments 
+    });
 
-    setAppState(prev => ({
-      ...prev,
-      loans: [loan, ...prev.loans]
-    }));
-    setShowAdd(false);
+    if (!error) {
+      await refresh();
+      setShowAdd(false);
+      setNewLoan({ memberId: '', totalAmount: 0, termMonths: 6, issueDate: new Date().toISOString().split('T')[0] });
+    } else {
+      alert("Error issuing loan: " + error.message);
+    }
+    setLoading(false);
   };
 
-  const handlePayInstallment = (loanId: string, installmentId: string) => {
+  const handlePayInstallment = async (loanId: string, installmentId: string) => {
     if (!isManager) return;
-    setAppState(prev => {
-      const updatedLoans = prev.loans.map(l => {
-        if (l.id === loanId) {
-          const updatedInstallments = l.installments.map(ins => {
-            if (ins.id === installmentId) {
-              return { ...ins, paid: true, paymentDate: new Date().toISOString() };
-            }
-            return ins;
-          });
-          const allPaid = updatedInstallments.every(ins => ins.paid);
-          return { ...l, installments: updatedInstallments, status: allPaid ? 'COMPLETED' : 'ACTIVE' };
-        }
-        return l;
-      });
-      return { ...prev, loans: updatedLoans };
+    
+    // Find the loan and update the specific installment
+    const loanToUpdate = appState.loans.find(l => l.id === loanId);
+    if (!loanToUpdate) return;
+
+    const updatedInstallments = loanToUpdate.installments.map(ins => {
+      if (ins.id === installmentId) {
+        return { ...ins, paid: true, paymentDate: new Date().toISOString() };
+      }
+      return ins;
     });
+
+    const allPaid = updatedInstallments.every(ins => ins.paid);
+    const newStatus = allPaid ? 'COMPLETED' : 'ACTIVE';
+
+    // Update DB
+    const { error } = await supabase.from('loans').update({
+      installments: updatedInstallments,
+      status: newStatus
+    }).eq('id', loanId);
+
+    if (!error) {
+      refresh();
+    } else {
+      alert("Failed to mark payment: " + error.message);
+    }
   };
 
   const filteredLoans = isManager 
@@ -163,9 +176,10 @@ const LoansPage: React.FC<LoansPageProps> = ({ appState, setAppState, isManager 
               </button>
               <button 
                 type="submit"
+                disabled={loading}
                 className="flex-1 bg-amber-500 text-white py-3 rounded-xl font-bold text-sm shadow-lg shadow-amber-100"
               >
-                Issue Fund
+                {loading ? 'Processing...' : 'Issue Fund'}
               </button>
             </div>
           </form>
