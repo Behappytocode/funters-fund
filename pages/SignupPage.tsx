@@ -1,8 +1,7 @@
-
 import React, { useState } from 'react';
-import { UserRole } from '../types';
-import { LOGO } from '../constants';
-import { supabase } from '../supabase';
+import { UserRole } from '../types.ts';
+import { LOGO } from '../constants.tsx';
+import { supabase } from '../supabase.ts';
 
 const SignupPage: React.FC<{ onToggle: () => void }> = ({ onToggle }) => {
   const [name, setName] = useState('');
@@ -39,14 +38,14 @@ const SignupPage: React.FC<{ onToggle: () => void }> = ({ onToggle }) => {
         options: {
           data: {
             full_name: cleanName,
-            role: role,
+            role: role, // THIS IS CRITICAL for the trigger
           }
         }
       });
 
       if (signUpError) {
         if (signUpError.message.includes('Database error saving new user')) {
-          setError('CRITICAL: Supabase Database Trigger Failed. Please ensure you have executed the schema.sql code in your Supabase SQL Editor.');
+          setError('Database Error: Please run the SQL setup script in Supabase Dashboard.');
         } else if (signUpError.message.includes('User already registered')) {
           setError('This email is already registered. Try logging in.');
         } else {
@@ -57,7 +56,7 @@ const SignupPage: React.FC<{ onToggle: () => void }> = ({ onToggle }) => {
         setError('This email is already taken. Please use a different one or log in.');
         setLoading(false);
       } else if (!data.user) {
-        setError('Signup failed. Please try again or check your Supabase dashboard.');
+        setError('Signup failed. Please try again.');
         setLoading(false);
       } else {
         setSuccess(true);
@@ -65,7 +64,7 @@ const SignupPage: React.FC<{ onToggle: () => void }> = ({ onToggle }) => {
       }
     } catch (err) {
       console.error("Signup error:", err);
-      setError('A system error occurred. Please check your Supabase keys and database status.');
+      setError('A system error occurred. Please check your internet connection.');
       setLoading(false);
     }
   };
