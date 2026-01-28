@@ -1,28 +1,21 @@
+
 import React from 'react';
-import { AppState, UserStatus } from '../types.ts';
-import { supabase } from '../supabase.ts';
+import { AppState, UserStatus, UserRole } from '../types';
 
 interface InboxPageProps {
   appState: AppState;
-  refresh: () => void;
+  setAppState: React.Dispatch<React.SetStateAction<AppState>>;
   isManager: boolean;
 }
 
-const InboxPage: React.FC<InboxPageProps> = ({ appState, refresh, isManager }) => {
+const InboxPage: React.FC<InboxPageProps> = ({ appState, setAppState, isManager }) => {
   const pendingUsers = appState.users.filter(u => u.status === UserStatus.PENDING);
 
-  const handleAction = async (userId: string, status: UserStatus) => {
-    // Correctly update database
-    const { error } = await supabase
-      .from('profiles')
-      .update({ status: status })
-      .eq('id', userId);
-
-    if (!error) {
-      refresh(); // Reload data from DB to reflect change
-    } else {
-      alert("Error updating user: " + error.message);
-    }
+  const handleAction = (userId: string, status: UserStatus) => {
+    setAppState(prev => ({
+      ...prev,
+      users: prev.users.map(u => u.id === userId ? { ...u, status } : u)
+    }));
   };
 
   if (!isManager) {

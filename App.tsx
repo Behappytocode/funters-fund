@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useRef } from 'react';
 import { User, UserRole, UserStatus, AppState } from './types.ts';
 import { INITIAL_DEVELOPER, LOGO } from './constants.tsx';
@@ -94,11 +95,13 @@ const App: React.FC = () => {
     checkSession();
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
-      if (event === 'SIGNED_IN' && session) {
+      // If a user just signed up, Supabase might fire 'SIGNED_IN'.
+      // We only want to auto-redirect to dashboard if it's not a fresh signup 
+      // where the user needs to see their success message first.
+      if (session) {
         retryCount.current = 0;
-        setLoading(true);
         fetchUserData(session.user.id);
-      } else if (event === 'SIGNED_OUT') {
+      } else {
         setAppState(prev => ({ ...prev, currentUser: null }));
         setLoading(false);
       }
@@ -111,17 +114,8 @@ const App: React.FC = () => {
     if (!isSupabaseConfigured) return;
     try {
       const { data: profiles } = await supabase.from('profiles').select('*');
-      
-      // Note: We use maybeSingle/maps to handle empty data gracefully
-      const { data: depositsData } = await supabase
-        .from('deposits')
-        .select(`*, profiles(name)`)
-        .order('created_at', { ascending: false });
-
-      const { data: loansData } = await supabase
-        .from('loans')
-        .select(`*, profiles(name)`)
-        .order('created_at', { ascending: false });
+      const { data: depositsData } = await supabase.from('deposits').select(`*, profiles(name)`);
+      const { data: loansData } = await supabase.from('loans').select(`*, profiles(name)`);
 
       setAppState(prev => ({
         ...prev,
@@ -157,33 +151,49 @@ const App: React.FC = () => {
     if (!isSupabaseConfigured) return;
     
     try {
-      // 1. Attempt to get the profile
       const { data: profile, error } = await supabase
         .from('profiles')
         .select('*')
         .eq('id', userId)
-        .maybeSingle(); 
+        .maybeSingle(); // maybeSingle is safer than single() during signup race conditions
 
-      // 2. Retry Logic: If Trigger hasn't finished yet, wait and try again
       if (error || !profile) {
         if (retryCount.current < maxRetries) {
           retryCount.current += 1;
-          console.warn(`Profile not ready (Attempt ${retryCount.current}/${maxRetries}). Retrying...`);
-          setTimeout(() => fetchUserData(userId), 1000); // Wait 1s
+          console.warn(`Profile record not yet found (Attempt ${retryCount.current}/${maxRetries}). Waiting for trigger...`);
+          setTimeout(() => fetchUserData(userId), 1500);
           return;
         } else {
-          // Trigger failed completely - Log out user to prevent stuck state
-          await supabase.auth.signOut();
-          setLoading(false);
-          alert("Account setup failed. Please contact support or try again.");
-          return;
+          // Attempt manual profile creation as a fallback if the trigger failed
+          const { data: { session } } = await supabase.auth.getSession();
+          if (session) {
+            console.info("Trigger likely failed. Attempting manual profile repair...");
+            const { data: repaired, error: repairError } = await supabase
+              .from('profiles')
+              .insert({
+                id: userId,
+                email: session.user.email,
+                name: session.user.user_metadata?.full_name || session.user.email?.split('@')[0],
+                role: session.user.user_metadata?.role || 'MEMBER',
+                status: session.user.user_metadata?.role === 'ADMIN' ? 'APPROVED' : 'PENDING'
+              })
+              .select()
+              .single();
+            
+            if (!repairError && repaired) {
+              setAppState(prev => ({ ...prev, currentUser: repaired as User }));
+              await fetchData();
+              setLoading(false);
+              return;
+            }
+          }
+          throw new Error("User record not found in database.");
         }
       }
 
-      // 3. Success
       if (profile) {
         setAppState(prev => ({ ...prev, currentUser: profile as User }));
-        await fetchData(); // Load the rest of the app data
+        await fetchData();
         setLoading(false);
       }
     } catch (err) {
@@ -317,8 +327,8 @@ const App: React.FC = () => {
       <main className="p-6 max-w-lg mx-auto">
         {activeTab === 'HOME' && <Dashboard appState={appState} />}
         {activeTab === 'DEPOSITS' && <DepositsPage appState={appState} refresh={fetchData} isManager={isManager} />}
-        {activeTab === 'LOANS' && <LoansPage appState={appState} refresh={fetchData} isManager={isManager} />}
-        {activeTab === 'INBOX' && <InboxPage appState={appState} refresh={fetchData} isManager={isManager} />}
+        {activeTab === 'LOANS' && <LoansPage appState={appState} setAppState={setAppState} isManager={isManager} />}
+        {activeTab === 'INBOX' && <InboxPage appState={appState} setAppState={setAppState} isManager={isManager} />}
         {activeTab === 'DEV' && <DevProfile appState={appState} setAppState={setAppState} isManager={isManager} />}
       </main>
 
