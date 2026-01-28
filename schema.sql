@@ -4,8 +4,8 @@ CREATE TABLE IF NOT EXISTS public.profiles (
   id UUID REFERENCES auth.users ON DELETE CASCADE PRIMARY KEY,
   name TEXT NOT NULL,
   email TEXT UNIQUE NOT NULL,
-  role TEXT NOT NULL DEFAULT 'MEMBER', -- 'ADMIN' or 'MEMBER'
-  status TEXT NOT NULL DEFAULT 'PENDING', -- 'PENDING', 'APPROVED', 'REJECTED'
+  role TEXT NOT NULL DEFAULT 'MEMBER',
+  status TEXT NOT NULL DEFAULT 'PENDING',
   created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
@@ -54,12 +54,10 @@ CREATE POLICY "Admins can manage loans" ON public.loans FOR ALL USING (
   EXISTS (SELECT 1 FROM public.profiles WHERE id = auth.uid() AND role = 'ADMIN')
 );
 
--- 5. ROBUST AUTOMATIC PROFILE TRIGGER
+-- 5. FAIL-SAFE TRIGGER
 CREATE OR REPLACE FUNCTION public.handle_new_user()
 RETURNS trigger AS $$
 BEGIN
-  -- 1. Create the public profile with robustness
-  -- We use explicit public. prefix and ON CONFLICT to prevent failures
   INSERT INTO public.profiles (id, name, email, role, status)
   VALUES (
     new.id, 
@@ -68,23 +66,11 @@ BEGIN
     COALESCE(new.raw_user_meta_data->>'role', 'MEMBER'),
     CASE WHEN (new.raw_user_meta_data->>'role') = 'ADMIN' THEN 'APPROVED' ELSE 'PENDING' END
   )
-  ON CONFLICT (id) DO UPDATE SET
-    name = EXCLUDED.name,
-    email = EXCLUDED.email,
-    role = EXCLUDED.role;
-
-  -- 2. Force confirm the email in the auth table
-  -- Note: This is required to bypass the 'Email not confirmed' error
-  UPDATE auth.users 
-  SET email_confirmed_at = NOW(), 
-      confirmed_at = NOW()
-  WHERE id = NEW.id;
-
+  ON CONFLICT (id) DO NOTHING;
   RETURN new;
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
 
--- Cleanup and re-apply trigger
 DROP TRIGGER IF EXISTS on_auth_user_created ON auth.users;
 CREATE TRIGGER on_auth_user_created
   AFTER INSERT ON auth.users

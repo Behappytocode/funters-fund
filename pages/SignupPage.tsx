@@ -20,7 +20,7 @@ const SignupPage: React.FC<{ onToggle: () => void }> = ({ onToggle }) => {
     const cleanPassword = password.trim();
 
     if (!cleanName || !cleanEmail || !cleanPassword) {
-      setError('Please fill in all fields.');
+      setError('All fields are required.');
       return;
     }
 
@@ -45,27 +45,21 @@ const SignupPage: React.FC<{ onToggle: () => void }> = ({ onToggle }) => {
       });
 
       if (signUpError) {
-        if (signUpError.message.includes('Database error saving new user')) {
-          setError('CRITICAL: Supabase Database Trigger Failed. Please ensure you have executed the schema.sql code in your Supabase SQL Editor.');
-        } else if (signUpError.message.includes('User already registered')) {
-          setError('This email is already registered. Try logging in.');
+        if (signUpError.message.includes('Database error')) {
+          setError('SYSTEM ERROR: The Supabase trigger failed. Please ensure you have run the schema.sql code in the Supabase SQL Editor.');
         } else {
           setError(signUpError.message);
         }
         setLoading(false);
-      } else if (data.user && data.user.identities && data.user.identities.length === 0) {
-        setError('This email is already taken. Please use a different one or log in.');
-        setLoading(false);
-      } else if (!data.user) {
-        setError('Signup failed. Please try again or check your Supabase dashboard.');
+      } else if (data.user && (!data.user.identities || data.user.identities.length === 0)) {
+        setError('This email is already registered.');
         setLoading(false);
       } else {
         setSuccess(true);
         setLoading(false);
       }
     } catch (err) {
-      console.error("Signup error:", err);
-      setError('A system error occurred. Please check your Supabase keys and database status.');
+      setError('Network error. Please try again.');
       setLoading(false);
     }
   };
@@ -76,19 +70,14 @@ const SignupPage: React.FC<{ onToggle: () => void }> = ({ onToggle }) => {
         <div className="w-24 h-24 bg-emerald-50 text-emerald-500 rounded-full flex items-center justify-center mb-6 border border-emerald-100 animate-in zoom-in duration-300">
           <i className="fa-solid fa-circle-check text-4xl"></i>
         </div>
-        <h2 className="text-3xl font-black text-slate-800 mb-2 tracking-tight">Account Created!</h2>
+        <h2 className="text-3xl font-black text-slate-800 mb-2 tracking-tight">Success!</h2>
         <p className="text-slate-500 mb-8 font-medium leading-relaxed px-4">
-          Welcome to the circle, <b className="text-indigo-600">{name}</b>.<br/>
+          Account for <b className="text-indigo-600">{name}</b> created.<br/>
           {role === UserRole.ADMIN 
-            ? "Your Manager account is active. You can sign in immediately." 
-            : "Your request is sent. A manager must approve you before you can access the fund."}
+            ? "Manager access is ready. You can sign in now." 
+            : "Member access requires approval from a Manager."}
         </p>
-        <button 
-          onClick={onToggle} 
-          className="w-full bg-slate-900 text-white font-black py-5 rounded-2xl shadow-xl active:scale-95 transition-all"
-        >
-          Go to Sign In
-        </button>
+        <button onClick={onToggle} className="w-full bg-slate-900 text-white font-black py-5 rounded-2xl shadow-xl">Go to Sign In</button>
       </div>
     );
   }
@@ -96,14 +85,14 @@ const SignupPage: React.FC<{ onToggle: () => void }> = ({ onToggle }) => {
   return (
     <div className="min-h-screen bg-white p-8 flex flex-col justify-center max-w-md mx-auto">
       <div className="mb-10 flex flex-col items-center">{LOGO}</div>
-      <div className="space-y-2 mb-8 text-center">
-        <h2 className="text-3xl font-black text-slate-800 tracking-tight">Join the Circle</h2>
-        <p className="text-slate-400 font-medium">Friendship that stands in crisis.</p>
+      <div className="text-center mb-8">
+        <h2 className="text-3xl font-black text-slate-800 tracking-tight">Create Account</h2>
+        <p className="text-slate-400 font-medium">Join the private communal fund.</p>
       </div>
 
       {error && (
-        <div className="bg-rose-50 text-rose-500 p-5 rounded-3xl text-xs font-bold mb-6 border border-rose-100 flex items-start gap-3 animate-in fade-in slide-in-from-top-2 shadow-sm">
-          <i className="fa-solid fa-triangle-exclamation mt-0.5 text-rose-600"></i> 
+        <div className="bg-rose-50 text-rose-500 p-5 rounded-3xl text-xs font-bold mb-6 border border-rose-100 flex items-start gap-3 shadow-sm">
+          <i className="fa-solid fa-circle-exclamation mt-0.5"></i> 
           <span className="leading-relaxed">{error}</span>
         </div>
       )}
@@ -111,69 +100,31 @@ const SignupPage: React.FC<{ onToggle: () => void }> = ({ onToggle }) => {
       <form onSubmit={handleSubmit} className="space-y-4">
         <div>
           <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5 ml-1">Full Name</label>
-          <input 
-            type="text" required value={name} onChange={e => setName(e.target.value)} 
-            className="w-full bg-slate-50 border border-slate-100 px-5 py-4 rounded-2xl text-sm focus:ring-2 focus:ring-indigo-500 transition-all outline-none" 
-            placeholder="e.g. Abubakar S." 
-          />
+          <input type="text" required value={name} onChange={e => setName(e.target.value)} className="w-full bg-slate-50 border border-slate-100 px-5 py-4 rounded-2xl text-sm focus:ring-2 focus:ring-indigo-500 outline-none" placeholder="Enter your name" />
         </div>
         <div>
           <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5 ml-1">Email</label>
-          <input 
-            type="email" required value={email} onChange={e => setEmail(e.target.value)} 
-            className="w-full bg-slate-50 border border-slate-100 px-5 py-4 rounded-2xl text-sm focus:ring-2 focus:ring-indigo-500 transition-all outline-none" 
-            placeholder="name@example.com" 
-          />
+          <input type="email" required value={email} onChange={e => setEmail(e.target.value)} className="w-full bg-slate-50 border border-slate-100 px-5 py-4 rounded-2xl text-sm focus:ring-2 focus:ring-indigo-500 outline-none" placeholder="name@example.com" />
         </div>
         <div>
           <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5 ml-1">Password</label>
-          <input 
-            type="password" required value={password} onChange={e => setPassword(e.target.value)} 
-            className="w-full bg-slate-50 border border-slate-100 px-5 py-4 rounded-2xl text-sm focus:ring-2 focus:ring-indigo-500 transition-all outline-none" 
-            placeholder="Min. 6 characters" 
-          />
+          <input type="password" required value={password} onChange={e => setPassword(e.target.value)} className="w-full bg-slate-50 border border-slate-100 px-5 py-4 rounded-2xl text-sm focus:ring-2 focus:ring-indigo-500 outline-none" placeholder="Min. 6 characters" />
         </div>
         <div>
-          <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2 ml-1">Account Role</label>
+          <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2 ml-1">Select Role</label>
           <div className="grid grid-cols-2 gap-3">
-            <button 
-              type="button" 
-              onClick={() => setRole(UserRole.MEMBER)} 
-              className={`py-4 rounded-2xl text-[10px] font-black uppercase tracking-widest border transition-all ${role === UserRole.MEMBER ? 'bg-indigo-600 border-indigo-600 text-white shadow-lg' : 'bg-white border-slate-100 text-slate-400'}`}
-            >
-              Member
-            </button>
-            <button 
-              type="button" 
-              onClick={() => setRole(UserRole.ADMIN)} 
-              className={`py-4 rounded-2xl text-[10px] font-black uppercase tracking-widest border transition-all ${role === UserRole.ADMIN ? 'bg-indigo-600 border-indigo-600 text-white shadow-lg' : 'bg-white border-slate-100 text-slate-400'}`}
-            >
-              Manager
-            </button>
+            <button type="button" onClick={() => setRole(UserRole.MEMBER)} className={`py-4 rounded-2xl text-[10px] font-black uppercase tracking-widest border transition-all ${role === UserRole.MEMBER ? 'bg-indigo-600 border-indigo-600 text-white shadow-lg' : 'bg-white border-slate-100 text-slate-400'}`}>Member</button>
+            <button type="button" onClick={() => setRole(UserRole.ADMIN)} className={`py-4 rounded-2xl text-[10px] font-black uppercase tracking-widest border transition-all ${role === UserRole.ADMIN ? 'bg-indigo-600 border-indigo-600 text-white shadow-lg' : 'bg-white border-slate-100 text-slate-400'}`}>Manager</button>
           </div>
-          <p className="mt-3 text-[10px] text-slate-400 px-1 italic">
-            {role === UserRole.ADMIN ? 'Managers get instant access.' : 'Members require approval.'}
-          </p>
         </div>
         
-        <button 
-          disabled={loading} 
-          type="submit" 
-          className="w-full bg-slate-900 text-white font-black py-5 rounded-2xl shadow-xl active:scale-95 transition-all disabled:opacity-50 mt-4"
-        >
-          {loading ? (
-            <div className="flex items-center justify-center gap-2">
-              <div className="w-4 h-4 border-2 border-white/20 border-t-white rounded-full animate-spin"></div>
-              <span>Creating Account...</span>
-            </div>
-          ) : 'Sign Up'}
+        <button disabled={loading} type="submit" className="w-full bg-slate-900 text-white font-black py-5 rounded-2xl shadow-xl active:scale-95 disabled:opacity-50 mt-4">
+          {loading ? 'Creating Account...' : 'Sign Up'}
         </button>
       </form>
 
       <div className="mt-8 text-center">
-        <p className="text-sm text-slate-400 font-medium">
-          Already a user? <button onClick={onToggle} className="text-indigo-600 font-black hover:underline">Sign In</button>
-        </p>
+        <p className="text-sm text-slate-400 font-medium">Already have an account? <button onClick={onToggle} className="text-indigo-600 font-black hover:underline">Sign In</button></p>
       </div>
     </div>
   );
